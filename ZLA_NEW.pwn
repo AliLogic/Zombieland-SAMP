@@ -1,5 +1,5 @@
 /*
-	Script licensed to Logic_, produced for 'Addictive Gaming' ()
+	Script licensed to Logic_
 	Copyright 2017-2018
 	Licensed under The Digital Millennium Copyright Act of 1998 (https://www.copyright.gov/legislation/dmca.pdf)
 
@@ -16,6 +16,7 @@
 	- Reduced buffer sizes at many places!
 	- Removed few useless textdraws and variables
 	- A lot cleaner code
+	- Removed the stupid time saving method (will be replaced!)
 	
 	- Function changes:
 	-- new GetAdminRankName function
