@@ -9,6 +9,6 @@
 7. The code looks a lot more cleaner.
 8. Removed the play time saving method which used three different variables.
 9. General function changes:
-9a. new GetAdminName renamed to GetAdminRank function
-9b. Improved the GetClosestPlayer function
-9c. Re-written OnPlayerDeath.
+- new GetAdminName renamed to GetAdminRank function
+- Improved the GetClosestPlayer function
+- Re-written OnPlayerDeath.
