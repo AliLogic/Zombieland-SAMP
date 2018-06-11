@@ -2,32 +2,9 @@
 	Script licensed to Logic_
 	Copyright 2017-2018
 	Licensed under The Digital Millennium Copyright Act of 1998 (https://www.copyright.gov/legislation/dmca.pdf)
+	Version 1 Buil
 
 	Formerly known as Zombieland (samp-zombieland.info)
-*/
-/*
-	Update info:
-	- Improved indentation of the script.
-	- Improved the rank system.
-	- Improved the class system.
-	- SQLite
-	- Removed /updates
-	- Updated several commands by optimizing them and rewriting them
-	- Reduced buffer sizes at many places!
-	- Removed few useless textdraws and variables
-	- A lot cleaner code
-	- Removed the stupid time saving method (will be replaced!)
-	
-	- Function changes:
-	-- new GetAdminRankName function
-	-- Improved GetClosestPlayer
-	-- OnPlayerDeath rewritten
-
-	To Do:
-	- Ban system
-	- Terrorist bomb system
-	- Improve VIP label system
-	- Textdraws cleanup
 */
 
 #include	<a_samp>
@@ -64,8 +41,21 @@
 #define		GetAdminRankName(%0)		\
 			gAdminRanks[pInfo[%0][pAdminLevel]]
 
+#define		KickPlayer(%0)				\
+			SetTimerEx("KickTimer", 1000, false, "i", %0)
+
+#define		GetPlayerNameEx(%0)			\
+			pInfo[%0][pName]
+
 #define		MAX_PASSWORD_LEN			65
 #define		PASSWORD_SALT				"xxxtentacion" // anyways, you should use per-player salts
+
+#define		MAX_REASON_LEN				20 // Maximum ban reason length
+
+#define		TABLE_BANS					"`Bans`"
+#define		FIELD_BAN_ID				"ID"
+#define		FIELD_BANNAME				"Name"
+#define		FIELD_BANREASON				"Reason"
 
 #define 	TABLE_USERS					"`Users`"
 #define		FIELD_ID					"ID"
@@ -401,21 +391,21 @@ new Map[mapinfo];
 enum E_PLAYER_INFO
 {
 	pID,
-	pSpawned,
+	pName[MAX_PLAYER_NAME],
 	pPassword[65],
 	pCash,
 	pXP,
-	pRoundZombies,
-	pRoundDeaths,
-	pRoundKills,
 	pKills,
 	pHeads,
 	pDeaths,
 	pRank,
+	
+	pRoundZombies,
+	pRoundDeaths,
+	pRoundKills,
 	pEvac,
 	pAdminLevel,
 	pTime,
-	pBanned,
 	pAdminDuty,
 	BannedIP[22],
 	pVipLevel,
@@ -446,7 +436,8 @@ enum E_PLAYER_INFO
 	pDamageMP5Coin,
 	pDoctorShield,
 	Frozen,
-	Minigun
+	Minigun,
+	pSpawned
 };
 new pInfo[MAX_PLAYERS][E_PLAYER_INFO];
 
@@ -674,7 +665,7 @@ function EndMap(playerid)
 	foreach(new i : Player)
 	{
 		if (!IsPlayerConnected(i)) continue;
-		format(string, sizeof string, "%s~r~Name: ~w~ %s(ID:%d) -  ~b~Humans Killed: ~w~%d  -  ~r~Zombies Killed: ~w~%d~n~", string, PlayerName(i), i, pInfo[i][pRoundKills], pInfo[i][pRoundZombies]);
+		format(string, sizeof string, "%s~r~Name: ~w~ %s(ID:%d) -  ~b~Humans Killed: ~w~%d  -  ~r~Zombies Killed: ~w~%d~n~", string, GetPlayerNameEx(i), i, pInfo[i][pRoundKills], pInfo[i][pRoundZombies]);
 		TextDrawSetString(Textdraw9, string);
 
 		TextDrawShowForPlayer(i, Textdraw7);
@@ -779,7 +770,7 @@ public OnPlayerEnterCheckpoint(playerid)
 		{
 			SetPlayerInterior(playerid,17);
 			SetPlayerPos(playerid,490.6371,-18.4129,1000.6797);
-			format(string, sizeof string, ""chat""COL_LGREEN"{ffffff} %s{99CCFF} made it to evacuation point and has received {FFD700}1 Token{99CCFF}!",PlayerName(playerid));
+			format(string, sizeof string, ""chat""COL_LGREEN"{ffffff} %s{99CCFF} made it to evacuation point and has received {FFD700}1 Token{99CCFF}!", GetPlayerNameEx(playerid));
 			SendClientMessageToAll(-1,string);
 			GameTextForPlayer(playerid,"~n~~n~~n~~n~~n~~y~+10 XP ~n~~g~+100 $",3500,5);
 			DisablePlayerCheckpoint(playerid);
@@ -812,17 +803,20 @@ public OnGameModeInit()
 	
 	print("SQLite: Connected to the database.");
 
-	db_query(gSQL, "CREATE TABLE IF NOT EXISTS "TABLE_USERS" \
+	db_free_result(db_query(gSQL, "CREATE TABLE IF NOT EXISTS "#TABLE_BANS" \
+		("FIELD_BAN_ID" INTEGER PRIMARY KEY AUTOINCREMENT, "FIELD_BANNAME" STRING, "FIELD_BANREASON" STRING)"));
+
+	db_free_result(db_query(gSQL, "CREATE TABLE IF NOT EXISTS "TABLE_USERS" \
 		("FIELD_ID" INTEGER PRIMARY KEY AUTOINCREMENT, "FIELD_NAME" STRING, "FIELD_PASSWORD" STRING, "FIELD_IP" STRING, "FIELD_CASH" INTEGER DEFAULT '0', "FIELD_XP" INTEGER DEFAULT '0', \
 		"FIELD_KILLS" INTEGER DEFAULT '0', "FIELD_DEATHS" INTEGER DEFAULT '0', "FIELD_HEADS" INTEGER DEFAULT '0', "FIELD_EVAC" INTEGER DEFAULT '0', "FIELD_RANK" INTEGER DEFAULT '0', "FIELD_ADMIN" INTEGER DEFAULT '0', \
-		"FIELD_VIP" INTEGER DEFAULT '0', "FIELD_TIME" INTEGER DEFAULT '0', "FIELD_MAPS" INTEGER DEFAULT '0', "FIELD_COINS" INTEGER DEFAULT '0')");
+		"FIELD_VIP" INTEGER DEFAULT '0', "FIELD_TIME" INTEGER DEFAULT '0', "FIELD_MAPS" INTEGER DEFAULT '0', "FIELD_COINS" INTEGER DEFAULT '0')"));
 
-	db_query(gSQL, "CREATE TABLE IF NOT EXISTS "TABLE_MAPS" \
+	db_free_result(db_query(gSQL, "CREATE TABLE IF NOT EXISTS "TABLE_MAPS" \
 		("FIELD_MAP_ID" INTEGER PRIMARY KEY AUTOINCREMENT, "FIELD_MAP_FS_NAME" STRING, "FIELD_MAP_NAME" STRING, "FIELD_MAP_HUMAN_SPAWN_X" FLOAT, "FIELD_MAP_HUMAN_SPAWN_Y" FLOAT, "FIELD_MAP_HUMAN_SPAWN_Z" FLOAT, \
 		"FIELD_MAP_HUMAN_SPAWN2_X" FLOAT, "FIELD_MAP_HUMAN_SPAWN2_Y" FLOAT, "FIELD_MAP_HUMAN_SPAWN2_Z" FLOAT, "FIELD_MAP_ZOMBIE_SPAWN_X" FLOAT, "FIELD_MAP_ZOMBIE_SPAWN_Y" FLOAT, "FIELD_MAP_ZOMBIE_SPAWN_Z" FLOAT, \
 		"FIELD_MAP_INTERIOR" INTEGER, "FIELD_MAP_GATE_X" REAL, "FIELD_MAP_GATE_Y" REAL, "FIELD_MAP_GATE_Z" REAL, "FIELD_MAP_GATE2_X" REAL, "FIELD_MAP_GATE2_Y" REAL, "FIELD_MAP_GATE2_Z" REAL, \
 		"FIELD_MAP_CP_X" REAL, "FIELD_MAP_CP_Y" REAL, "FIELD_MAP_CP_Z" REAL, "FIELD_MAP_MOVE_GATE" INTEGER, "FIELD_MAP_GATE_ID" INTEGER, "FIELD_MAP_WATER" INTEGER, "FIELD_MAP_EVAC_TYPE" INTEGER, \
-		"FIELD_MAP_WEATHER" INTEGER, "FIELD_MAP_TIME" INTEGER)");
+		"FIELD_MAP_WEATHER" INTEGER, "FIELD_MAP_TIME" INTEGER)"));
 
 	//ConvertMaps();
 	LoadMaps();
@@ -884,7 +878,7 @@ custom DoctorShield()
 				if(hp < 80)
 				{
 					SetPlayerHealth(i,hp+3.5);
-					format(str,sizeof(str),"~n~~n~~n~~n~~g~GETTING HEALED BY DOCTOR SHIELD~w~ (NEW HP: %.2f HP)",hp);
+					format(str,sizeof str,"~n~~n~~n~~n~~g~GETTING HEALED BY DOCTOR SHIELD~w~ (NEW HP: %.2f HP)",hp);
 					GameTextForPlayer(i,str,1000,5);
 				}
 				else
@@ -950,7 +944,7 @@ custom UpdateKillStatsTD(playerid)
 			Map[Interior], Map[GateX], Map[GateY], Map[GateZ], Map[GaterX], Map[GaterY], Map[GaterZ],
 			Map[CPx], Map[CPy], Map[CPz], Map[MoveGate], Map[GateID], Map[AllowWater], Map[EvacType],
 			Map[Weather], Map[Time]);
-		db_query(gSQL, query);
+		db_free_result(db_query(gSQL, query));
 		//print(query);
 	}
 }
@@ -1100,82 +1094,41 @@ public OnPlayerRequestSpawn(playerid)
 
 public OnPlayerConnect(playerid)
 {
+	GetPlayerName(playerid, GetPlayerNameEx(playerid), MAX_PLAYER_NAME);
+	SetPlayerWeather(playerid, 12);
+	SetPlayerTime(playerid, 21, 0);
+
+	// Removes all the vending machines that may give players health with tricky usage of radius!
+	RemoveBuildingForPlayer(playerid, 955, 0.0, 0.0, 0.0, 3000.0);
+	RemoveBuildingForPlayer(playerid, 956, 0.0, 0.0, 0.0, 3000.0);
+	RemoveBuildingForPlayer(playerid, 1209, 0.0, 0.0, 0.0, 3000.0);
+	RemoveBuildingForPlayer(playerid, 1302, 0.0, 0.0, 0.0, 3000.0);
+	RemoveBuildingForPlayer(playerid, 1775, 0.0, 0.0, 0.0, 3000.0);
+	RemoveBuildingForPlayer(playerid, 1776, 0.0, 0.0, 0.0, 3000.0);
+
 	TextDrawHideForPlayer(playerid, Textdraw7);
 	TextDrawHideForPlayer(playerid, Textdraw8);
 	TextDrawHideForPlayer(playerid, Textdraw9);
 	TextDrawHideForPlayer(playerid, Textdraw10);
 	TextDrawHideForPlayer(playerid, Textdraw11);
 	TextDrawHideForPlayer(playerid, Textdraw12);
-	SetPlayerWeather(playerid, 12);
-	SetPlayerTime(playerid, 21, 0);
 
-	//REMOVED ALL VENDING MACHINES//
-	RemoveBuildingForPlayer(playerid, 956, 1634.1487,-2238.2810,13.5077, 20.0); //Snack vender @ LS Airport
-	RemoveBuildingForPlayer(playerid, 956, 2480.9885,-1958.5117,13.5831, 20.0); //Snack vender @ Sushi Shop in Willowfield
-	RemoveBuildingForPlayer(playerid, 955, 1729.7935,-1944.0087,13.5682, 20.0); //Sprunk machine @ Unity Station
-	RemoveBuildingForPlayer(playerid, 955, 2060.1099,-1898.4543,13.5538, 20.0); //Sprunk machine opposite Tony's Liqour in Willowfield
-	RemoveBuildingForPlayer(playerid, 955, 2325.8708,-1645.9584,14.8270, 20.0); //Sprunk machine @ Ten Green Bottles
-	RemoveBuildingForPlayer(playerid, 955, 1153.9130,-1460.8893,15.7969, 20.0); //Sprunk machine @ Market
-	RemoveBuildingForPlayer(playerid, 955,1788.3965,-1369.2336,15.7578, 20.0); //Sprunk machine in Downtown Los Santos
-	RemoveBuildingForPlayer(playerid, 955, 2352.9939,-1357.1105,24.3984, 20.0); //Sprunk machine @ Liquour shop in East Los Santos
-	RemoveBuildingForPlayer(playerid, 1775, 2224.3235,-1153.0692,1025.7969, 20.0); //Sprunk machine @ Jefferson Motel
-	RemoveBuildingForPlayer(playerid, 956, 2140.2566,-1161.7568,23.9922, 20.0); //Snack machine @ pick'n'go market in Jefferson
-	RemoveBuildingForPlayer(playerid, 956, 2154.1199,-1015.7635,62.8840, 20.0); //Snach machine @ Carniceria El Pueblo in Las Colinas
-	RemoveBuildingForPlayer(playerid, 956, 662.5665,-551.4142,16.3359, 20.0); //Snack vender at Dillimore Gas Station
-	RemoveBuildingForPlayer(playerid, 955, 200.2010,-107.6401,1.5513, 20.0); //Sprunk machine @ Blueberry Safe House
-	RemoveBuildingForPlayer(playerid, 956, 2271.4666,-77.2104,26.5824, 20.0); //Snack machine @ Palomino Creek Library
-	RemoveBuildingForPlayer(playerid, 955, 1278.5421,372.1057,19.5547, 20.0); //Sprunk machine @ Papercuts in Montgomery
-	RemoveBuildingForPlayer(playerid, 955, 1929.5527,-1772.3136,13.5469, 20.0); //Sprunk machine @ Idlewood Gas Station
-	RemoveBuildingForPlayer(playerid, 1302, -2419.5835,984.4185,45.2969, 20.0); //Soda machine 1 @ Juniper Hollow Gas Station
-	RemoveBuildingForPlayer(playerid, 1209, -2419.5835,984.4185,45.2969, 20.0); //Soda machine 2 @ Juniper Hollow Gas Station
-	RemoveBuildingForPlayer(playerid, 956, -2229.2075,287.2937,35.3203, 20.0); //Snack vender @ King's Car Park
-	RemoveBuildingForPlayer(playerid, 955, -1349.3947,493.1277,11.1953, 20.0); //Sprunk machine @ SF Aircraft Carrier
-	RemoveBuildingForPlayer(playerid, 956, -1349.3947,493.1277,11.1953, 20.0); //Snack vender @ SF Aircraft Carrier
-	RemoveBuildingForPlayer(playerid, 955, -1981.6029,142.7232,27.6875, 20.0); //Sprunk machine @ Cranberry Station
-	RemoveBuildingForPlayer(playerid, 955, -2119.6245,-422.9411,35.5313, 20.0); //Sprunk machine 1/2 @ SF Stadium
-	RemoveBuildingForPlayer(playerid, 955, -2097.3696,-397.5220,35.5313, 20.0); //Sprunk machine 3 @ SF Stadium
-	RemoveBuildingForPlayer(playerid, 955, -2068.5593,-397.5223,35.5313, 20.0); //Sprunk machine 3 @ SF Stadium
-	RemoveBuildingForPlayer(playerid, 955, -2039.8802,-397.5214,35.5313, 20.0); //Sprunk machine 3 @ SF Stadium
-	RemoveBuildingForPlayer(playerid, 955, -2011.1403,-397.5225,35.5313, 20.0); //Sprunk machine 3 @ SF Stadium
-	RemoveBuildingForPlayer(playerid, 955, -2005.7861,-490.8688,35.5313, 20.0); //Sprunk machine 3 @ SF Stadium
-	RemoveBuildingForPlayer(playerid, 955, -2034.5267,-490.8681,35.5313, 20.0); //Sprunk machine 3 @ SF Stadium
-	RemoveBuildingForPlayer(playerid, 955, -2063.1875,-490.8687,35.5313, 20.0); //Sprunk machine 3 @ SF Stadium
-	RemoveBuildingForPlayer(playerid, 955, -2091.9780,-490.8684,35.5313, 20.0); //Sprunk machine 3 @ SF Stadium
-	RemoveBuildingForPlayer(playerid, 956, -1455.1298,2592.4138,55.8359, 20.0); //Snack vender @ El Quebrados GONE
-	RemoveBuildingForPlayer(playerid, 955, -252.9574,2598.9048,62.8582, 20.0); //Sprunk machine @ Las Payasadas GONE
-	RemoveBuildingForPlayer(playerid, 956, -252.9574,2598.9048,62.8582, 20.0); //Snack vender @ Las Payasadas GONE
-	RemoveBuildingForPlayer(playerid, 956, 1398.7617,2223.3606,11.0234, 20.0); //Snack vender @ Redsands West GONE
-	RemoveBuildingForPlayer(playerid, 955, -862.9229,1537.4246,22.5870, 20.0); //Sprunk machine @ The Smokin' Beef Grill in Las Barrancas GONE
-	RemoveBuildingForPlayer(playerid, 955, -14.6146,1176.1738,19.5634, 20.0); //Sprunk machine @ Fort Carson GONE
-	RemoveBuildingForPlayer(playerid, 956, -75.2839,1227.5978,19.7360, 20.0); //Snack vender @ Fort Carson GONE
-	RemoveBuildingForPlayer(playerid, 955, 1519.3328,1055.2075,10.8203, 20.0); //Sprunk machine @ LVA Freight Department GONE
-	RemoveBuildingForPlayer(playerid, 956, 1659.5096,1722.1096,10.8281, 20.0); //Snack vender near Binco @ LV Airport GONE
-	RemoveBuildingForPlayer(playerid, 955, 2086.5872,2071.4958,11.0579, 20.0); //Sprunk machine @ Sex Shop on The Strip
-	RemoveBuildingForPlayer(playerid, 955, 2319.9001,2532.0376,10.8203, 20.0); //Sprunk machine @ Pizza co by Julius Thruway (North)
-	RemoveBuildingForPlayer(playerid, 955, 2503.2061,1244.5095,10.8203, 20.0); //Sprunk machine @ Club in the Camels Toe
-	RemoveBuildingForPlayer(playerid, 956, 2845.9919,1294.2975,11.3906, 20.0); //Snack vender @ Linden Station
-	RemoveBuildingForPlayer(playerid, 1775, 496.0843,-23.5310,1000.6797, 20.0); //Sprunk machine 1 @ Club in Camels Toe
-	RemoveBuildingForPlayer(playerid, 1775, 501.1219,-2.1968,1000.6797, 20.0); //Sprunk machine 2 @ Club in Camels Toe
-	RemoveBuildingForPlayer(playerid, 1776, 501.1219,-2.1968,1000.6797, 20.0); //Snack vender @ Club in Camels Toe
-	RemoveBuildingForPlayer(playerid, 1775, -19.2299,-57.0460,1003.5469, 20.0); //Sprunk machine @ Roboi's type 24/7 stores
-	RemoveBuildingForPlayer(playerid, 1776, -35.9012,-57.1345,1003.5469, 20.0); //Snack vender @ Roboi's type 24/7 stores
-	RemoveBuildingForPlayer(playerid, 1775, -17.0036,-90.9709,1003.5469, 20.0); //Sprunk machine @ Other 24/7 stores
-	RemoveBuildingForPlayer(playerid, 1776, -17.0036,-90.9709,1003.5469, 20.0); //Snach vender @ Others 24/7 stores
-	//
-
-	if (pInfo[playerid][pAdminDuty] == 1)
-	{
-		pInfo[playerid][pAdminDuty] = 0;
-	}
 	playerOnline++;
 	ResetVars(playerid);
 	ConnectVars(playerid);
 
-	new string[60], pName[MAX_PLAYER_NAME];
-	GetPlayerName(playerid, pName, MAX_PLAYER_NAME);
-	format(string,sizeof string,"{808080}%s has joined the server.",pName);
+	new string[60];
+	format(string,sizeof string,"{808080}%s has joined the server.", GetPlayerNameEx(playerid));
 	SendClientMessageToAll(-1, string);
 
+	ResetCoinVars(playerid);
+	
+	if (CheckBan(GetPlayerNameEx(playerid))) {
+		SendClientMessage(playerid, -1, "{808080} YOU'RE BANNED FROM THIS SERVER!");
+
+		KickPlayer(playerid);
+		return 0;
+	}
 	CheckAccount(playerid);
 
 	TextDrawHideForPlayer(playerid, Textdraw7);
@@ -1184,15 +1137,13 @@ public OnPlayerConnect(playerid)
 	TextDrawHideForPlayer(playerid, Textdraw10);
 	TextDrawHideForPlayer(playerid, Textdraw11);
 	TextDrawHideForPlayer(playerid, Textdraw12);
-
-	ResetCoinVars(playerid);
 	return 1;
 }
 
 CheckAccount(playerid)
 {
 	new query[128], DBResult: result;
-	format(query, sizeof query, "SELECT "FIELD_PASSWORD", "FIELD_ID" FROM "TABLE_USERS" WHERE "FIELD_NAME" = '%q'", PlayerName(playerid));
+	format(query, sizeof query, "SELECT "FIELD_PASSWORD", "FIELD_ID" FROM "TABLE_USERS" WHERE "FIELD_NAME" = '%q'", GetPlayerNameEx(playerid));
 	result = db_query(gSQL, query);
 
 	if (db_num_rows(result))
@@ -1235,20 +1186,19 @@ SaveAccount(playerid)
 	format(query, sizeof query,
 		"UPDATE "TABLE_USERS" SET "FIELD_CASH" = %d, "FIELD_XP" = %d, "FIELD_KILLS" = %d, "FIELD_DEATHS" = %d, "FIELD_HEADS" = %d WHERE "FIELD_ID" = %d",
 		pInfo[playerid][pCash], pInfo[playerid][pXP], pInfo[playerid][pKills], pInfo[playerid][pDeaths], pInfo[playerid][pHeads], pInfo[playerid][pID]);
-	db_query(gSQL, query);
+	db_free_result(db_query(gSQL, query));
 
 	return 1;
 }
 
 public OnPlayerDisconnect(playerid, reason)
 {
-	new pname[MAX_PLAYER_NAME], string[39 + MAX_PLAYER_NAME];
-	GetPlayerName(playerid, pname, sizeof(pname));
+	new string[39 + MAX_PLAYER_NAME];
 	switch (reason)
 	{
-		case 0: format(string, sizeof string, "{808080}%s has left the server. (Lost Connection)", pname);
-		case 1: format(string, sizeof string, "{808080}%s has left the server. (Leaving)", pname);
-		case 2: format(string, sizeof string, "{808080}%s has left the server. (Kicked)", pname);
+		case 0: format(string, sizeof string, "{808080}%s has left the server. (Lost Connection)", GetPlayerNameEx(playerid));
+		case 1: format(string, sizeof string, "{808080}%s has left the server. (Leaving)", GetPlayerNameEx(playerid));
+		case 2: format(string, sizeof string, "{808080}%s has left the server. (Kicked)", GetPlayerNameEx(playerid));
 	}
 	SendClientMessageToAll(0xAAAAAAAA, string);
 
@@ -1396,7 +1346,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 			if (!response)
 			{
 				SendClientMessage(playerid, -1, "You must register to play at "NAME);
-				return SetTimerEx("KickTimer", 1000, false, "i", playerid);
+				return KickPlayer(playerid);
 			}
 
 			if (!strlen(inputtext))
@@ -1408,8 +1358,8 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 			GetPlayerIp(playerid, IP, sizeof IP);
 			SHA256_PassHash(inputtext, PASSWORD_SALT, pInfo[playerid][pPassword], MAX_PASSWORD_LEN);
 
-			format(query, sizeof query, "INSERT INTO "TABLE_USERS" ("FIELD_NAME", "FIELD_PASSWORD", "FIELD_IP") VALUES('%q', '%q', '%q')", PlayerName(playerid), pInfo[playerid][pPassword], IP);
-			db_query(gSQL, query);
+			format(query, sizeof query, "INSERT INTO "TABLE_USERS" ("FIELD_NAME", "FIELD_PASSWORD", "FIELD_IP") VALUES('%q', '%q', '%q')", GetPlayerNameEx(playerid), pInfo[playerid][pPassword], IP);
+			db_free_result(db_query(gSQL, query));
 
 			result = db_query(gSQL, "SELECT last_insert_rowid()");
 			pInfo[playerid][pID] = db_get_field_int(result);
@@ -1425,7 +1375,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 			if (!response)
 			{
 				SendClientMessage(playerid, -1, "You must log in to play at "NAME);
-				SetTimerEx("KickTimer", 1000, false, "i", playerid);
+				KickPlayer(playerid);
 			}
 			
 			new buf[65];
@@ -1991,40 +1941,13 @@ public OnPlayerDeath(playerid, killerid, reason)
 
 		new string[128], gunname[32];
 		GetWeaponName(reason, gunname, sizeof gunname);
-		format(string, sizeof string,"You have killed~r~ %s~w~ with an %s", PlayerName(playerid), gunname);
+		format(string, sizeof string,"You have killed~r~ %s~w~ with an %s", GetPlayerNameEx(playerid), gunname);
 		TextDrawSetString(iKilled[killerid],string);
 		TextDrawShowForPlayer(killerid, iKilled[killerid]);
 		
 		SetTimerEx("HideiKilled", 3000, 0, "i", killerid);
 
-		new kstring[256];
-		switch (pInfo[killerid][Killstreak])
-		{
-			case 5: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a killstreak of 5 "COL_WHITE"(+50 XP +100$) (1 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 50, GivePlayerMoney(killerid, 100), pInfo[killerid][pCash] += 100, pInfo[killerid][pCoins] += 1;
-			case 10: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 10 killstreak "COL_WHITE"(+80 XP +160$) (2 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 80, GivePlayerMoney(killerid, 160), pInfo[killerid][pCash] += 160, pInfo[killerid][pCoins] += 2;
-			case 15: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 15 killstreak "COL_WHITE"(+100 XP +200$) (3 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 100, GivePlayerMoney(killerid, 200), pInfo[killerid][pCash] += 200, pInfo[killerid][pCoins] += 3;
-			case 20: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 20 killstreak "COL_WHITE"(+150 XP +300$) (4 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 150, GivePlayerMoney(killerid, 300), pInfo[killerid][pCash] += 300, pInfo[killerid][pCoins] += 4;
-			case 25: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 25 killstreak "COL_WHITE"(+200 XP +400$) (5 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 200, GivePlayerMoney(killerid, 400), pInfo[killerid][pCash] += 400, pInfo[killerid][pCoins] += 5;
-			case 30: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 30 killstreak "COL_WHITE"(+250 XP +500$) (6 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 250, GivePlayerMoney(killerid, 500), pInfo[killerid][pCash] += 500, pInfo[killerid][pCoins] += 6;
-			case 35: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 35 killstreak "COL_WHITE"(+350 XP +700$) (7 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 350, GivePlayerMoney(killerid, 700), pInfo[killerid][pCash] += 700, pInfo[killerid][pCoins] += 7;
-			case 40: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 40 killstreak "COL_WHITE"(+500 XP +1000$) (8 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 500, GivePlayerMoney(killerid, 1000), pInfo[killerid][pCash] += 1000, pInfo[killerid][pCoins] += 8;
-			case 45: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 45 killstreak "COL_WHITE"(+600 XP +1200$) (9 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 600, GivePlayerMoney(killerid, 1200), pInfo[killerid][pCash] += 1200, pInfo[killerid][pCoins] += 9;
-			case 50: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 50 killstreak "COL_WHITE"(+800 XP +1600$) (10 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 800, GivePlayerMoney(killerid, 1600), pInfo[killerid][pCash] += 1600, pInfo[killerid][pCoins] += 10;
-			case 55: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 55 killstreak "COL_WHITE"(+950 XP +1900$) (11 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 950, GivePlayerMoney(killerid, 1900), pInfo[killerid][pCash] += 1900, pInfo[killerid][pCoins] += 11;
-			case 60: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 60 killstreak "COL_WHITE"(+1000 XP +2000$) (12 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 1000, GivePlayerMoney(killerid, 2000), pInfo[killerid][pCash] += 2000, pInfo[killerid][pCoins] += 12;
-			case 65: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 65 killstreak "COL_WHITE"(+1200 XP +2400$) (13 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 1200, GivePlayerMoney(killerid, 2400), pInfo[killerid][pCash] += 2400, pInfo[killerid][pCoins] += 13;
-			case 70: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 70 killstreak "COL_WHITE"(+1500 XP +3000$) (14 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 1500, GivePlayerMoney(killerid, 3000), pInfo[killerid][pCash] += 3000, pInfo[killerid][pCoins] += 14;
-			case 75: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 75 killstreak "COL_WHITE"(+1600 XP +3200$) (15 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 1600, GivePlayerMoney(killerid, 3200), pInfo[killerid][pCash] += 3200, pInfo[killerid][pCoins] += 15;
-			case 80: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 80 killstreak "COL_WHITE"(+1800 XP +3600$) (16 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 1800, GivePlayerMoney(killerid, 3600), pInfo[killerid][pCash] += 3600, pInfo[killerid][pCoins] += 16;
-			case 85: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 85 killstreak "COL_WHITE"(+1900 XP +3800$) (17 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 1900, GivePlayerMoney(killerid, 3800), pInfo[killerid][pCash] += 3800, pInfo[killerid][pCoins] += 17;
-			case 90: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 90 killstreak "COL_WHITE"(+2000 XP +4000$) (18 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 2000, GivePlayerMoney(killerid, 4000), pInfo[killerid][pCash] += 4000, pInfo[killerid][pCoins] += 18;
-			case 95: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 95 killstreak "COL_WHITE"(+5000 XP +10000$) (19 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 5000, GivePlayerMoney(killerid, 10000), pInfo[killerid][pCash] += 10000, pInfo[killerid][pCoins] += 19;
-			case 100: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 100 killstreak "COL_WHITE"(+5500 XP +10500$) (20 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 5500, GivePlayerMoney(killerid, 10500), pInfo[killerid][pCash] += 10500, pInfo[killerid][pCoins] += 20;
-			case 105: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 105 killstreak "COL_WHITE"(+6000 XP +12000$) (21 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 6000, GivePlayerMoney(killerid, 12000), pInfo[killerid][pCash] += 12000, pInfo[killerid][pCoins] += 21;
-			case 110: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 110 killstreak "COL_WHITE"(+6500 XP +13000$) (22 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 6500, GivePlayerMoney(killerid, 13000), pInfo[killerid][pCash] += 13000, pInfo[killerid][pCoins] += 22;
-			case 115: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 115 killstreak "COL_WHITE"(+7000 XP +14000$) (23 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 7000, GivePlayerMoney(killerid, 14000), pInfo[killerid][pCash] += 14000, pInfo[killerid][pCoins] += 23;
-			case 120: format(kstring,sizeof kstring,""chat""COL_WHITE" %s{9999FF} has achieved a 120 killstreak "COL_WHITE"(+7500 XP +15000$) (24 Tokens)",PlayerName(killerid)), SendClientMessageToAll(-1,kstring), pInfo[killerid][pXP] += 7500, GivePlayerMoney(killerid, 15000), pInfo[killerid][pCash] += 15000, pInfo[killerid][pCoins] += 24;
-		}
+		CheckPlayerKillStreak(killerid);
 		
 		CheckToLevelOrRankUp(killerid);
 	}
@@ -2213,11 +2136,11 @@ public OnPlayerTakeDamage(playerid, issuerid, Float: amount, weaponid, bodypart)
 					SetPlayerHealth(playerid, -0);
 					GameTextForPlayer(playerid, "~n~~r~HEADSHOT", 3000, 3);
 					GameTextForPlayer(issuerid, "~n~~g~HEADSHOT", 3000, 3);
+					
 					new Float:x, Float:y, Float:z, Float:fDistance, hsMessage[90], KName[MAX_PLAYER_NAME], PName[MAX_PLAYER_NAME];
 					GetPlayerPos(playerid, x, y, z);
 					fDistance = GetPlayerDistanceFromPoint(issuerid, x, y, z);
-					GetPlayerName(issuerid, KName, MAX_PLAYER_NAME);
-					GetPlayerName(playerid, PName, MAX_PLAYER_NAME);
+
 					format(hsMessage, sizeof(hsMessage), "{DC143C}%s has Headshotted {FFFFFF}%s{DC143C} from the distance of %0.2f", KName, PName, fDistance);
 					SendClientMessageToAll(-1, hsMessage);
 					pInfo[issuerid][pHeads]++;
@@ -2228,120 +2151,65 @@ public OnPlayerTakeDamage(playerid, issuerid, Float: amount, weaponid, bodypart)
 	return 1;
 }
 
-public OnPlayerText(playerid, text[])
-{
-	if (GetPVarInt(playerid, "SPS Muted") == 0)
+public OnPlayerText(playerid, text[]) { // Updated by Logic_
+
+	if (!pInfo[playerid][pLogged]) return 0;
+
+	if (!GetPVarInt(playerid, "SPS Muted")) return SendClientMessage(playerid, -1, ""chat""COL_LIGHTBLUE" {99CCFF}You are muted, you can't talk."), 0;
+
+	SetPVarInt(playerid, "SPS Messages Sent", GetPVarInt(playerid, "SPS Messages Sent") + 1);
+	SetTimerEx("SPS_Remove_Messages_Limit", 1500, 0, "i", playerid);
+
+	if (GetPVarInt(playerid, "SPS Messages Sent") >= 4)
 	{
-		SetPVarInt(playerid, "SPS Messages Sent", GetPVarInt(playerid, "SPS Messages Sent") + 1);
-		SetTimerEx("SPS_Remove_Messages_Limit", 1500, 0, "i", playerid);
-
-		if (GetPVarInt(playerid, "SPS Messages Sent") >= 4)
+		if (!(((GetPVarInt(playerid, "SPS Spam Warnings") + 2) == 3)))
 		{
-			if (!(((GetPVarInt(playerid, "SPS Spam Warnings") + 2) == 3)))
-			{
-				SendClientMessage(playerid, -1, ""chat""COL_LIGHTBLUE" {99CCFF}Please, do not spam.");
-			}
-			SetPVarInt(playerid, "SPS Spam Warnings", GetPVarInt(playerid, "SPS Spam Warnings") + 1);
+			SendClientMessage(playerid, -1, ""chat""COL_LIGHTBLUE" {99CCFF}Please, do not spam.");
 		}
+		SetPVarInt(playerid, "SPS Spam Warnings", GetPVarInt(playerid, "SPS Spam Warnings") + 1);
+	}
 
-		if (pInfo[playerid][pTeam] == TEAM_ZOMBIE)
+	if (pInfo[playerid][IsPlayerMuted] == 1) SendClientMessage(playerid,-1,""chat" {99CCFF}You are muted.");
+
+	if (strfind(text, ":", true) != -1)
+	{
+		new i_numcount, i_period, i_pos;
+		while(text[i_pos])
 		{
-			new stringbigz[356],name[MAX_PLAYER_NAME];
-			GetPlayerName(playerid, name, sizeof(name));
-			format(stringbigz,sizeof(stringbigz),"%s{FFFFFF}(%d): %s",PlayerName(playerid),playerid,text);
-			SendClientMessageToAll(GetPlayerColor(playerid), stringbigz);
+			if ('0' <= text[i_pos] <= '9') i_numcount ++;
+			else if (text[i_pos] == '.') i_period ++;
+			i_pos++;
 		}
-		else if (pInfo[playerid][pTeam] == TEAM_HUMAN)
+		if (i_numcount >= 8 && i_period >= 3)
 		{
-			new stringbigz[356],name[MAX_PLAYER_NAME];
-			GetPlayerName(playerid, name, sizeof(name));
-			format(stringbigz,sizeof(stringbigz),"%s{FFFFFF}(%d): %s", PlayerName(playerid),playerid,text);
-			SendClientMessageToAll(GetPlayerColor(playerid), stringbigz);
-		}
-
-		if (pInfo[playerid][pLogged] == 1)
-		{
-			if (pInfo[playerid][IsPlayerMuted] == 1) SendClientMessage(playerid,-1,""chat" {99CCFF}You are muted.");
-
-			if (strfind(text, ":", true) != -1)
-			{
-				new i_numcount, i_period, i_pos;
-				while(text[i_pos])
-				{
-					if ('0' <= text[i_pos] <= '9') i_numcount ++;
-					else if (text[i_pos] == '.') i_period ++;
-					i_pos++;
-				}
-				if (i_numcount >= 8 && i_period >= 3)
-				{
-					new
-					playerName[MAX_PLAYER_NAME],
-					string[144];
-					new reason[128];
-					new Admin[24] = "Anti-Cheat";
-					format(reason,sizeof(reason),"Advertisement %s",text);
-					GetPlayerName(playerid, playerName, MAX_PLAYER_NAME);
-					format(string, sizeof string, "{FFFFFF}[{00FF80}ANTI-CHEAT{FFFFFF}]: {00FF80}%s (ID:%d) has been banned from the server {FFFFFF}[{00FF80}ADVERTISEMENT{FFFFFF}]", playerName, playerid);
-					SendClientMessageToAll(-1, string);
-					new str2[2000];
-					strcat(str2,"{FF0000}You are banned from the server!\n");
-					strcat(str2,"\n");
-					strcat(str2,"{FFFFFF}Reason:{FF0000} ADVERTISEMENT\n");
-					strcat(str2,"{FFFFFF}Banned By:{00FF80} ANTI-CHEAT\n");
-					strcat(str2,"\n");
-					strcat(str2,"{FFFFFF}You can post Ban Appeal on our Forums:\n");
-					strcat(str2,"{FFFF33}www.samp-zombieland.info\n");
-					ShowPlayerDialog(playerid,DIALOG_HELP,DIALOG_STYLE_MSGBOX,"{DC143C}BANNED!",str2,"Close","");
-					BanPlayer(playerid,reason,Admin);
-					return 0;
-				}
-			}
+			BanPlayer(playerid, "Possible Adv", INVALID_PLAYER_ID);
+			return 0;
 		}
 	}
-	else
-	{
-		SendClientMessage(playerid, -1, ""chat""COL_LIGHTBLUE" {99CCFF}You are muted, you can't talk.");
-		return 0;
-	}
+
+	// Added by Logic_
+	new string[144];
+	format(string, sizeof string, "%s"COL_WHITE"(%d): %s", GetPlayerNameEx(playerid), playerid, text);
+	SendClientMessageToAll(GetPlayerColor(playerid), string);
 	return 0;
 }
 
 public OnPlayerKeyStateChange(playerid, newkeys, oldkeys)
 {
-	if (newkeys == KEY_NO)
+	if (newkeys == KEY_NO && pInfo[playerid][pTeam] == TEAM_ZOMBIE && pInfo[playerid][pSpawned])
 	{
-		if (pInfo[playerid][pTeam] == TEAM_ZOMBIE && pInfo[playerid][pSpawned] == 1)
-		{
 		KillTimer(connect_timer[playerid]);
 		connect_timer[playerid] = SetTimerEx("EndAntiSpawnKill", 1, false, "i", playerid);
 		SendClientMessage(playerid, 0xFFFFF55, "{ffffff}[{33FF99}ANTI-SK{ffffff}]: You Have Ended Your Spawn Protection.");
-		}
 	}
+
 	if (PRESSED(KEY_FIRE))
 	{
 		switch (GetPlayerWeapon(playerid))
 		{
 			case 2,3,5,6,7,8,9,10,11,12,13,14,15,18,26,28,35,36,37,39,40,41,42,43,44,45,46:
 			{
-				new
-				playerName[MAX_PLAYER_NAME],
-				string[144];
-				new reason[128];
-				new Admin[24] = "Anti-Cheat";
-				format(reason,sizeof(reason),"Weapon Hack %i",GetPlayerWeapon(playerid));
-				GetPlayerName(playerid, playerName, MAX_PLAYER_NAME);
-				format(string, sizeof string, "{FFFFFF}[{00FF80}ANTI-CHEAT{FFFFFF}]: {00FF80}%s (ID:%d) has been banned from the server {FFFFFF}[{00FF80}WEAPON HACK{FFFFFF}]", playerName, playerid);
-				SendClientMessageToAll(-1, string);
-				new str2[2000];
-				strcat(str2,"{FF0000}You are banned from the server!\n");
-				strcat(str2,"\n");
-				strcat(str2,"{FFFFFF}Reason:{FF0000} WEAPON HACK\n");
-				strcat(str2,"{FFFFFF}Banned By:{00FF80} ANTI-CHEAT\n");
-				strcat(str2,"\n");
-				strcat(str2,"{FFFFFF}You can post Ban Appeal on our Forums:\n");
-				strcat(str2,"{FFFF33}www.samp-zombieland.info\n");
-				ShowPlayerDialog(playerid,DIALOG_HELP,DIALOG_STYLE_MSGBOX,"{DC143C}BANNED!",str2,"Close","");
-				BanPlayer(playerid,reason,Admin);
+				BanPlayer(playerid, "Weapon Hack", INVALID_PLAYER_ID);
 			}
 		}
 	}
@@ -2365,7 +2233,7 @@ public OnPlayerKeyStateChange(playerid, newkeys, oldkeys)
 		{
 			switch (GetPlayerWeapon(playerid))
 			{
-				case 9: ShowPlayerDialog(playerid,DIALOG_KICK,DIALOG_STYLE_MSGBOX,"Bugged!","You have been kicked due to chainsaw bug.\n Please reconnect, to solve the problem. Thank you!","Leave",""),SetTimerEx("KickTimer", 1000, false, "i", playerid);
+				case 9: ShowPlayerDialog(playerid,DIALOG_KICK,DIALOG_STYLE_MSGBOX,"Bugged!","You have been kicked due to chainsaw bug.\n Please reconnect, to solve the problem. Thank you!","Leave",""),KickPlayer(playerid);
 			}
 		}
 	}
@@ -2717,7 +2585,7 @@ public OnPlayerKeyStateChange(playerid, newkeys, oldkeys)
 									SetPlayerHealth(victimid, hp -45);
 									GameTextForPlayer(victimid,"~n~~n~~n~~n~~y~Witch attacked",3000,5);
 									GivePlayerXP(playerid,10);
-									format(zmstring,sizeof(zmstring), ""chat""COL_PINK" {66B2FF}%s{E5CCFF} has been witch attacked by {FF6666}%s",PlayerName(victimid),PlayerName(playerid));
+									format(zmstring,sizeof(zmstring), ""chat""COL_PINK" {66B2FF}%s{E5CCFF} has been witch attacked by {FF6666}%s", GetPlayerNameEx(victimid), GetPlayerNameEx(playerid));
 									SendClientMessageToAll(-1,zmstring);
 									Abilitys[playerid][WitchAttack2] = gettime();
 									}
@@ -2757,7 +2625,7 @@ public OnPlayerKeyStateChange(playerid, newkeys, oldkeys)
 										{
 											new zmstring[256];
 											InfectPlayerStandard(victimid);
-											format(zmstring,sizeof(zmstring), ""chat""COL_PINK" {66B2FF}%s{E5CCFF} has been infected by {FF6666}%s",PlayerName(victimid),PlayerName(playerid));
+											format(zmstring,sizeof(zmstring), ""chat""COL_PINK" {66B2FF}%s{E5CCFF} has been infected by {FF6666}%s",GetPlayerNameEx(victimid), GetPlayerNameEx(playerid));
 											SendClientMessageToAll(-1,zmstring);
 											GivePlayerXP(playerid,10);
 											GameTextForPlayer(playerid,"~n~~n~~n~~n~~n~~y~+10 XP",3500,5);
@@ -2799,7 +2667,7 @@ public OnPlayerKeyStateChange(playerid, newkeys, oldkeys)
 											InfectPlayerStandard(victimid);
 											smokegas[playerid] = SetPlayerAttachedObject(playerid, 7, 18729, 18, -2.2709, 1.1330, -5.0079, -6.0999, 109.2999, -98.0999, 1.0000, 1.0000, 1.0000, 0, 0);
 											SetTimerEx("Smoke",5000,0,"i",playerid);
-											format(zmstring,sizeof(zmstring), ""chat""COL_PINK" {66B2FF}%s{E5CCFF} has been infected by {FF6666}%s",PlayerName(victimid),PlayerName(playerid));
+											format(zmstring,sizeof(zmstring), ""chat""COL_PINK" {66B2FF}%s{E5CCFF} has been infected by {FF6666}%s",GetPlayerNameEx(victimid), GetPlayerNameEx(playerid));
 											SendClientMessageToAll(-1,zmstring);
 											GivePlayerXP(playerid,10);
 											GameTextForPlayer(playerid,"~n~~n~~n~~n~~n~~y~+10 XP",3500,5);
@@ -2837,7 +2705,7 @@ public OnPlayerKeyStateChange(playerid, newkeys, oldkeys)
 									{
 										new zmstring[256];
 										InfectPlayerMutated(victimid);
-										format(zmstring,sizeof(zmstring), ""chat""COL_PINK" {66B2FF}%s{E5CCFF} has been infected by {FF6666}%s",PlayerName(victimid),PlayerName(playerid));
+										format(zmstring,sizeof(zmstring), ""chat""COL_PINK" {66B2FF}%s{E5CCFF} has been infected by {FF6666}%s",GetPlayerNameEx(victimid), GetPlayerNameEx(playerid));
 										SendClientMessageToAll(-1,zmstring);
 										GivePlayerXP(playerid,10);
 										GameTextForPlayer(playerid,"~n~~n~~n~~n~~n~~y~+10 XP",3500,5);
@@ -2874,7 +2742,7 @@ public OnPlayerKeyStateChange(playerid, newkeys, oldkeys)
 									{
 										new zmstring[256];
 										InfectPlayerFleshEater(victimid);
-										format(zmstring,sizeof(zmstring), ""chat""COL_PINK" {66B2FF}%s{E5CCFF} has been bitten and infected by {FF6666}%s",PlayerName(victimid),PlayerName(playerid));
+										format(zmstring,sizeof(zmstring), ""chat""COL_PINK" {66B2FF}%s{E5CCFF} has been bitten and infected by {FF6666}%s",GetPlayerNameEx(victimid), GetPlayerNameEx(playerid));
 										SendClientMessageToAll(-1,zmstring);
 										GivePlayerXP(playerid,10);
 										GameTextForPlayer(playerid,"~n~~n~~n~~n~~n~~y~+10 XP",3500,5);
@@ -2935,24 +2803,7 @@ public OnPlayerKeyStateChange(playerid, newkeys, oldkeys)
 
 public OnVehicleMod(playerid, vehicleid, componentid)
 {
-	new
-	playerName[MAX_PLAYER_NAME],
-	string[144];
-	new Admin[24] = "Anti-Cheat";
-	new reason3[128] = "Vehicle Modding";
-	GetPlayerName(playerid, playerName, MAX_PLAYER_NAME);
-	format(string, sizeof string, "{FFFFFF}[{00FF80}ANTI-CHEAT{FFFFFF}]: {00FF80}%s (ID:%d) has been banned from the server {FFFFFF}[{00FF80}VEHICLE MODDING{FFFFFF}]", playerName, playerid);
-	SendClientMessageToAll(-1, string);
-	new str2[2000];
-	strcat(str2,"{FF0000}You are banned from the server!\n");
-	strcat(str2,"\n");
-	strcat(str2,"{FFFFFF}Reason:{FF0000} VEHICLE MODDING\n");
-	strcat(str2,"{FFFFFF}Banned By:{00FF80} ANTI-CHEAT\n");
-	strcat(str2,"\n");
-	strcat(str2,"{FFFFFF}You can post Ban Appeal on our Forums:\n");
-	strcat(str2,"{FFFF33}www.samp-zombieland.info\n");
-	ShowPlayerDialog(playerid,DIALOG_HELP,DIALOG_STYLE_MSGBOX,"{DC143C}BANNED!",str2,"Close","");
-	BanPlayer(playerid,reason3,Admin);
+	BanPlayer(playerid, "Vehicle Modding", INVALID_PLAYER_ID);
 	return 0;
 }
 
@@ -2983,19 +2834,19 @@ public AntiCheat()
 
 		if ((x <= -0.800000  || y <= -0.800000 || z <= -0.800000) && GetPlayerAnimationIndex(i) == 1008)
 		{
-			format(str, sizeof str, "[AC] Fly hack detected on %s (%d).", PlayerName(i), i);
+			format(str, sizeof str, "[AC] Fly hack detected on %s (%d).", GetPlayerNameEx(i), i);
 			SendMessageToAdmins(COLOR_RED, str);
 		}
 
 		if (GetPlayerSpeedSpeedo(i, true) > 400)
 		{
-			format(str, sizeof str, "[AC] Speed hacks detected on %s (%d).", PlayerName(i), i);
+			format(str, sizeof str, "[AC] Speed hacks detected on %s (%d).", GetPlayerNameEx(i), i);
 			SendMessageToAdmins(COLOR_RED, str);
 		}
 
 		if (GetPlayerWeapon(i) == 38 && !pInfo[i][Minigun])
 		{
-			format(str, sizeof str, "[AC] Banned %s (%d) for Minigun hack.", PlayerName(i), i);
+			format(str, sizeof str, "[AC] Banned %s (%d) for Minigun hack.", GetPlayerNameEx(i), i);
 		}
 
 		if (IsPlayerInWater(i))
@@ -3060,15 +2911,15 @@ CMD:cure(playerid,params[])
 	{
 		if (pInfo[playerid][pClass] == MEDIC || pInfo[playerid][pClass] == VIPMEDIC || pInfo[playerid][pClass] == DOCTOR)
 		{
-			new targetid,string[128],str[256];
-			if (sscanf(params,"u", targetid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /cure [playerid]");
+			new lookupid,string[128],str[256];
+			if (sscanf(params,"u", lookupid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /cure [playerid]");
 
-			if (pInfo[targetid][IsPlayerInfected] == 1)
+			if (pInfo[lookupid][IsPlayerInfected] == 1)
 			{
-				CurePlayer(targetid);
-				format(string, sizeof string,"~n~~n~~n~~n~~g~%s~w~ %s has cured you",GetPlayerClassName(playerid),PlayerName(playerid));
-				GameTextForPlayer(targetid,string,3500,5);
-				format(str,sizeof(str),""chat""COL_LGREEN" %s %s has cured %s",GetPlayerClassName(playerid),PlayerName(playerid),PlayerName(targetid));
+				CurePlayer(lookupid);
+				format(string, sizeof string,"~n~~n~~n~~n~~g~%s~w~ %s has cured you",GetPlayerClassName(playerid), GetPlayerNameEx(playerid));
+				GameTextForPlayer(lookupid,string,3500,5);
+				format(str,sizeof str,""chat""COL_LGREEN" %s %s has cured %s",GetPlayerClassName(playerid), GetPlayerNameEx(playerid), GetPlayerNameEx(lookupid));
 				SendClientMessageToAll(-1,str);
 				GivePlayerXP(playerid,20);
 			}
@@ -3088,11 +2939,11 @@ CMD:heal(playerid,params[])
 		{
 			if (pInfo[playerid][pClass] == MEDIC || pInfo[playerid][pClass] == VIPMEDIC || pInfo[playerid][pClass] == DOCTOR)
 			{
-				new targetid,string[128],str[256];
-				if (sscanf(params,"u", targetid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /heal [playerid]");
+				new lookupid,string[128],str[256];
+				if (sscanf(params,"u", lookupid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /heal [playerid]");
 				new Float:hp;
-				GetPlayerHealth(targetid,hp);
-				if (pInfo[targetid][pTeam] == TEAM_HUMAN)
+				GetPlayerHealth(lookupid,hp);
+				if (pInfo[lookupid][pTeam] == TEAM_HUMAN)
 				{
 					if (hp >= 80)
 					{
@@ -3102,20 +2953,20 @@ CMD:heal(playerid,params[])
 					{
 						if (pInfo[playerid][pClass] == MEDIC)
 						{
-							SetPlayerHealth(targetid,hp+5);
-							format(string, sizeof string,"~n~~n~~n~~n~~g~%s~w~ %s has healed you (New HP: %.2f)",GetPlayerClassName(playerid),PlayerName(playerid),hp);
-							GameTextForPlayer(targetid,string,3500,5);
-							format(str,sizeof(str),""chat""COL_LGREEN" %s %s has healed %s (NEW HP: %.2f HP)",GetPlayerClassName(playerid),PlayerName(playerid),PlayerName(targetid),hp,PlayerName(targetid));
+							SetPlayerHealth(lookupid,hp+5);
+							format(string, sizeof string,"~n~~n~~n~~n~~g~%s~w~ %s has healed you (New HP: %.2f)",GetPlayerClassName(playerid), GetPlayerNameEx(playerid),hp);
+							GameTextForPlayer(lookupid,string,3500,5);
+							format(str,sizeof str,""chat""COL_LGREEN" %s %s has healed %s (NEW HP: %.2f HP)",GetPlayerClassName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid),hp,GetPlayerNameEx(lookupid));
 							SendClientMessageToAll(-1,str);
 							GivePlayerXP(playerid,20);
 							Abilitys[playerid][HealCoolDown] = gettime();
 						}
 						else if (pInfo[playerid][pClass] == VIPMEDIC)
 						{
-							SetPlayerHealth(targetid,hp+20);
-							format(string, sizeof string,"~n~~n~~n~~n~~g~%s~w~ %s has healed you (by %.2f HP)",GetPlayerClassName(playerid),PlayerName(playerid),hp);
-							GameTextForPlayer(targetid,string,3500,5);
-							format(str,sizeof(str),""chat""COL_LGREEN" %s %s has healed %s by (NEW HP: %.2f HP)",GetPlayerClassName(playerid),PlayerName(playerid),PlayerName(targetid),hp);
+							SetPlayerHealth(lookupid,hp+20);
+							format(string, sizeof string,"~n~~n~~n~~n~~g~%s~w~ %s has healed you (by %.2f HP)",GetPlayerClassName(playerid), GetPlayerNameEx(playerid),hp);
+							GameTextForPlayer(lookupid,string,3500,5);
+							format(str,sizeof str,""chat""COL_LGREEN" %s %s has healed %s by (NEW HP: %.2f HP)",GetPlayerClassName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid),hp);
 							SendClientMessageToAll(-1,str);
 							GivePlayerXP(playerid,20);
 							Abilitys[playerid][HealCoolDown] = gettime();
@@ -3123,10 +2974,10 @@ CMD:heal(playerid,params[])
 
 						else if (pInfo[playerid][pClass] == DOCTOR)
 						{
-							SetPlayerHealth(targetid,hp+40);
-							format(string, sizeof string,"~n~~n~~n~~n~~g~%s~w~ %s has healed you (by %.2f HP)",GetPlayerClassName(playerid),PlayerName(playerid),hp);
-							GameTextForPlayer(targetid,string,3500,5);
-							format(str,sizeof(str),""chat""COL_LGREEN" %s %s has healed %s by (NEW HP: %.2f HP)",GetPlayerClassName(playerid),PlayerName(playerid),PlayerName(targetid),hp);
+							SetPlayerHealth(lookupid,hp+40);
+							format(string, sizeof string,"~n~~n~~n~~n~~g~%s~w~ %s has healed you (by %.2f HP)",GetPlayerClassName(playerid), GetPlayerNameEx(playerid),hp);
+							GameTextForPlayer(lookupid,string,3500,5);
+							format(str,sizeof str,""chat""COL_LGREEN" %s %s has healed %s by (NEW HP: %.2f HP)",GetPlayerClassName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid),hp);
 							SendClientMessageToAll(-1,str);
 							GivePlayerXP(playerid,35);
 							Abilitys[playerid][HealCoolDown] = gettime();
@@ -3149,7 +3000,7 @@ CMD:admins(playerid, params[])
 	{
 		if (pInfo[i][pAdminLevel] > 0)
 		{
-			format(adminstring, sizeof(adminstring),"%s%s: %s\n", adminstring, GetAdminRankName(i), PlayerName(i));
+			format(adminstring, sizeof(adminstring),"%s%s: %s\n", adminstring, GetAdminRankName(i), GetPlayerNameEx(i));
 			count++;
 		}
 	}
@@ -3166,7 +3017,7 @@ CMD:vips(playerid, params[])
 	{
 		if (pInfo[i][pVipLevel] > 0)
 		{
-			format(vipstring, sizeof(vipstring),"{ffffff}%s%s (ID:%d)\n", vipstring, PlayerName(i), playerid);
+			format(vipstring, sizeof(vipstring),"{ffffff}%s%s (ID:%d)\n", vipstring, GetPlayerNameEx(i), playerid);
 			count++;
 		}
 	}
@@ -3306,11 +3157,11 @@ CMD:pm(playerid,params[])
 	if (sscanf(params, "us", lastID, text)) return SendClientMessage(playerid, COLOR_RED,"{C0C0C0}USAGE: /pm [playerid] [message]");
 	if (!IsPlayerConnected(lastID)) return SendClientMessage(playerid, COLOR_RED,""chat" {FF0000}Player is not connected.");
 	if (lastID == playerid) return SendClientMessage(playerid, COLOR_RED,""chat" {FF0000}You cannot PM yourself.");
-	format(string, sizeof string, "%s (%d) is not accepting private messages at the moment.", PlayerName(lastID), lastID);
+	format(string, sizeof string, "%s (%d) is not accepting private messages at the moment.", GetPlayerNameEx(lastID), lastID);
 	if (pInfo[lastID][pPM] == 1) return SendClientMessage(playerid, COLOR_RED, string);
-	format(string, sizeof string, "{FF9933}PM to %s(%d):{ffffff} %s", PlayerName(lastID),lastID, text);
+	format(string, sizeof string, "{FF9933}PM to %s(%d):{ffffff} %s", GetPlayerNameEx(lastID),lastID, text);
 	SendClientMessage(playerid, COLOR_YELLOW, string);
-	format(string, sizeof string, "{FF9933}PM from %s(%d):{ffffff} %s", PlayerName(playerid),lastID, text);
+	format(string, sizeof string, "{FF9933}PM from %s(%d):{ffffff} %s", GetPlayerNameEx(playerid),lastID, text);
 	SendClientMessage(lastID, COLOR_YELLOW, string);
 	pInfo[lastID][Last] = playerid;
 	return 1;
@@ -3323,11 +3174,11 @@ CMD:r(playerid,params[])
 	new lastID = pInfo[playerid][Last];
 	if (!IsPlayerConnected(lastID)) return SendClientMessage(playerid, COLOR_RED,""chat" {FF0000}Player is not connected.");
 	if (lastID == playerid) return SendClientMessage(playerid, COLOR_RED,""chat" {FF0000}You cannot PM yourself.");
-	format(string, sizeof string, "%s (%d) is not accepting private messages at the moment.", PlayerName(lastID), lastID);
+	format(string, sizeof string, "%s (%d) is not accepting private messages at the moment.", GetPlayerNameEx(lastID), lastID);
 	if (pInfo[lastID][pPM] == 1) return SendClientMessage(playerid, COLOR_RED, string);
-	format(string, sizeof string, "{FF9933}PM to %s(%d):{ffffff} %s", PlayerName(lastID),lastID, text);
+	format(string, sizeof string, "{FF9933}PM to %s(%d):{ffffff} %s", GetPlayerNameEx(lastID),lastID, text);
 	SendClientMessage(playerid, COLOR_YELLOW, string);
-	format(string, sizeof string, "{FF9933}PM from %s(%d):{ffffff} %s", PlayerName(playerid),lastID, text);
+	format(string, sizeof string, "{FF9933}PM from %s(%d):{ffffff} %s", GetPlayerNameEx(playerid),lastID, text);
 	SendClientMessage(lastID, COLOR_YELLOW, string);
 	pInfo[lastID][Last] = playerid;
 	return 1;
@@ -3387,7 +3238,7 @@ CMD:z(playerid,params[])
 			SendClientMessage(playerid, -1, "{C0C0C0}USAGE: /z [message]");
 			return 1;
 		}
-		format(zstring, sizeof(zstring), "{ffffff}[{CC0000}ZOMBIE CHAT{ffffff}]%s[%d]: %s", PlayerName(playerid), playerid, params);
+		format(zstring, sizeof(zstring), "{ffffff}[{CC0000}ZOMBIE CHAT{ffffff}]%s[%d]: %s", GetPlayerNameEx(playerid), playerid, params);
 		SendZMessage(zstring, -1);
 	}
 	else return SendClientMessage(playerid,-1,""chat" You must be a zombie to use this chat function.");
@@ -3404,7 +3255,7 @@ CMD:h(playerid,params[])
 			SendClientMessage(playerid, -1, "{C0C0C0}USAGE: /h [message]");
 			return 1;
 		}
-		format(zstring, sizeof(zstring), "{ffffff}[{0080FF}HUMAN CHAT{ffffff}]%s[%d]: %s", PlayerName(playerid), playerid, params);
+		format(zstring, sizeof(zstring), "{ffffff}[{0080FF}HUMAN CHAT{ffffff}]%s[%d]: %s", GetPlayerNameEx(playerid), playerid, params);
 		SendHMessage(zstring, -1);
 	}
 	else return SendClientMessage(playerid,-1,""chat" You must be a human to use this chat function.");
@@ -3422,17 +3273,17 @@ CMD:report(playerid, params[])
 	if (pInfo[playerid][pLogged] == 1)
 	{
 
-		new text[128],targetid,string[128],sendername[MAX_PLAYER_NAME],giveplayer[MAX_PLAYER_NAME];
-		if (sscanf(params, "us[128]", targetid, text)) SendClientMessage(playerid, COLOR_GREY, "{C0C0C0}USAGE: /report [playerid] [reason]");
+		new text[128],lookupid,string[128],sendername[MAX_PLAYER_NAME],giveplayer[MAX_PLAYER_NAME];
+		if (sscanf(params, "us[128]", lookupid, text)) SendClientMessage(playerid, COLOR_GREY, "{C0C0C0}USAGE: /report [playerid] [reason]");
 		else
 		{
-			if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Invaild ID - That player is not connected.");
-			if (targetid == playerid) return SendClientMessage(playerid,-1,""chat" You cannot report yourself.");
-			format(sendername, sizeof(sendername), "%s", PlayerName(playerid));
-			format(giveplayer, sizeof(giveplayer), "%s", PlayerName(targetid));
-			format(string, sizeof string, "{ffffff}[{009999}REPORT{ffffff}]: %s[%d] has reported %s[%d] [Reason: %s]", sendername, playerid, giveplayer, targetid, text);
+			if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Invaild ID - That player is not connected.");
+			if (lookupid == playerid) return SendClientMessage(playerid,-1,""chat" You cannot report yourself.");
+			format(sendername, sizeof(sendername), "%s", GetPlayerNameEx(playerid));
+			format(giveplayer, sizeof(giveplayer), "%s", GetPlayerNameEx(lookupid));
+			format(string, sizeof string, "{ffffff}[{009999}REPORT{ffffff}]: %s[%d] has reported %s[%d] [Reason: %s]", sendername, playerid, giveplayer, lookupid, text);
 			SendMessageToAllAdmins(string, -1);
-			printf("{ffffff}[{009999}REPORT{ffffff}]: %s[%d] has reported %s[%d] [Reason: %s]", sendername, playerid, giveplayer, targetid, text);
+			printf("{ffffff}[{009999}REPORT{ffffff}]: %s[%d] has reported %s[%d] [Reason: %s]", sendername, playerid, giveplayer, lookupid, text);
 			SendClientMessage(playerid,-1,""chat" Thank you for reporting. We apologize for the disturbance.");
 		}
 	}
@@ -3444,16 +3295,16 @@ CMD:sharexp(playerid,params[])
 	if (pInfo[playerid][pLogged] == 1)
 	{
 		{
-			new targetid,givexp,reason[105],stringxp[256];
-			if (sscanf(params,"uis[105]", targetid,givexp,reason)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /sharexp [playerid] [amount] [reason]");
-			if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
-			if (targetid == playerid) return SendClientMessage(playerid,-1,""chat" You cannot give XP to yourself.");
+			new lookupid,givexp,reason[105],stringxp[256];
+			if (sscanf(params,"uis[105]", lookupid,givexp,reason)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /sharexp [playerid] [amount] [reason]");
+			if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+			if (lookupid == playerid) return SendClientMessage(playerid,-1,""chat" You cannot give XP to yourself.");
 
 			if (givexp > 0 && pInfo[playerid][pXP] >= givexp)
 			{
-				pInfo[targetid][pXP] += givexp;
+				pInfo[lookupid][pXP] += givexp;
 				pInfo[playerid][pXP] -= givexp;
-				format(stringxp,sizeof(stringxp),""chat" Player %s has shared %d XP to %s [Reason: %s]", PlayerName(playerid), givexp, PlayerName(targetid), reason);
+				format(stringxp,sizeof(stringxp),""chat" Player %s has shared %d XP to %s [Reason: %s]", GetPlayerNameEx(playerid), givexp, GetPlayerNameEx(lookupid), reason);
 				SendClientMessageToAll(-1,stringxp);
 				SetPlayerScore(playerid,pInfo[playerid][pXP]);
 				UpdateXPTextdraw(playerid);
@@ -3472,17 +3323,17 @@ CMD:sharecash(playerid,params[])
 	if (pInfo[playerid][pLogged] == 1)
 	{
 		{
-			new targetid,givecash,reason[105],stringcash[256];
-			if (sscanf(params,"uis[105]", targetid,givecash,reason)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /sharecash [playerid] [amount] [reason]");
-			if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
-			if (targetid == playerid) return SendClientMessage(playerid,-1,""chat" You cannot give Cash to yourself.");
+			new lookupid,givecash,reason[105],stringcash[256];
+			if (sscanf(params,"uis[105]", lookupid,givecash,reason)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /sharecash [playerid] [amount] [reason]");
+			if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+			if (lookupid == playerid) return SendClientMessage(playerid,-1,""chat" You cannot give Cash to yourself.");
 
 			if (givecash > 0 && pInfo[playerid][pCash] >= givecash)
 			{
-				pInfo[targetid][pCash] += givecash;
+				pInfo[lookupid][pCash] += givecash;
 				pInfo[playerid][pCash] -= givecash;
-				GivePlayerMoney(targetid, givecash);
-				format(stringcash,sizeof(stringcash),""chat" Player %s has shared %d Cash to %s [Reason: %s]", PlayerName(playerid), givecash, PlayerName(targetid), reason);
+				GivePlayerMoney(lookupid, givecash);
+				format(stringcash,sizeof(stringcash),""chat" Player %s has shared %d Cash to %s [Reason: %s]", GetPlayerNameEx(playerid), givecash, GetPlayerNameEx(lookupid), reason);
 				SendClientMessageToAll(-1,stringcash);
 			}
 			else
@@ -3539,13 +3390,13 @@ CMD:pstats(playerid,params[])
 {
 	if (pInfo[playerid][pXP] >= 20)
 	{
-		new targetid;
-		if (sscanf(params, "u", targetid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /pstats [playerid]");
-		if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+		new lookupid;
+		if (sscanf(params, "u", lookupid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /pstats [playerid]");
+		if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 		{
 			new string[2000];
-			new Float:kd = floatdiv(pInfo[targetid][pKills], pInfo[targetid][pDeaths]);
-			new Float:wins = floatdiv(pInfo[targetid][pMapsPlayed], pInfo[targetid][pEvac]);
+			new Float:kd = floatdiv(pInfo[lookupid][pKills], pInfo[lookupid][pDeaths]);
+			new Float:wins = floatdiv(pInfo[lookupid][pMapsPlayed], pInfo[lookupid][pEvac]);
 			format(string, sizeof string,"	Viewing player stats: %s \n\n\
 			Cash: %i\n\
 			Tokens: %i\n\
@@ -3560,9 +3411,9 @@ CMD:pstats(playerid,params[])
 			Vip Level: %i\n\
 			K:D RATIO: %0.2f\n\
 			Win RATIO: %0.2f",
-			PlayerName(targetid),pInfo[playerid][pCash],pInfo[targetid][pCoins],pInfo[targetid][pXP],
-			pInfo[targetid][pKills],pInfo[targetid][pDeaths],pInfo[targetid][pHeads],pInfo[targetid][pMapsPlayed],
-			pInfo[playerid][pRank],pInfo[targetid][pEvac],GetAdminRankName(targetid),pInfo[targetid][pVipLevel],
+			GetPlayerNameEx(lookupid),pInfo[playerid][pCash],pInfo[lookupid][pCoins],pInfo[lookupid][pXP],
+			pInfo[lookupid][pKills],pInfo[lookupid][pDeaths],pInfo[lookupid][pHeads],pInfo[lookupid][pMapsPlayed],
+			pInfo[playerid][pRank],pInfo[lookupid][pEvac],GetAdminRankName(lookupid),pInfo[lookupid][pVipLevel],
 			kd,wins);
 			//Played: %d Hours || %d Minutes || %d Seconds\n
 
@@ -3792,7 +3643,7 @@ CMD:v(playerid,params[])
 			SendClientMessage(playerid, -1, "{C0C0C0}USAGE: /v [message]");
 			return 1;
 		}
-		format(vipstring, sizeof(vipstring), "{ffffff}[{B266FF}VIP CHAT{ffffff}]%s(%d): %s",PlayerName(playerid), playerid, params);
+		format(vipstring, sizeof(vipstring), "{ffffff}[{B266FF}VIP CHAT{ffffff}]%s(%d): %s", GetPlayerNameEx(playerid), playerid, params);
 		SendMessageToAllVips(vipstring, -1);
 	}
 	else {
@@ -3824,7 +3675,7 @@ CMD:vsay(playerid,params[])
 			SendClientMessage(playerid, -1, "{C0C0C0}USAGE: /vsay [message]");
 			return 1;
 		}
-		format(string, sizeof string, "{B266FF}(VIP)%s {BA55D3}**%s**",PlayerName(playerid), params);
+		format(string, sizeof string, "{B266FF}(VIP)%s {BA55D3}**%s**", GetPlayerNameEx(playerid), params);
 		SendClientMessageToAll(COLOR_PURPLE,string);
 	}
 	else {
@@ -3849,15 +3700,15 @@ CMD:vcure(playerid,params[])
 	{
 		if (pInfo[playerid][pVipLevel] >= 2)
 		{
-			new targetid,string[128],str[256];
-			if (sscanf(params,"u", targetid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /vcure [playerid]");
+			new lookupid,string[128],str[256];
+			if (sscanf(params,"u", lookupid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /vcure [playerid]");
 
-			if (pInfo[targetid][IsPlayerInfected] == 1)
+			if (pInfo[lookupid][IsPlayerInfected] == 1)
 			{
-				CurePlayer(targetid);
-				format(string, sizeof string,"~n~~n~~n~~n~~g~VIP~w~ %s has cured you",GetPlayerClassName(playerid),PlayerName(playerid));
-				GameTextForPlayer(targetid,string,3500,5);
-				format(str,sizeof(str),""chat""COL_LGREEN" VIP %s has cured %s",GetPlayerClassName(playerid),PlayerName(playerid),PlayerName(targetid));
+				CurePlayer(lookupid);
+				format(string, sizeof string,"~n~~n~~n~~n~~g~VIP~w~ %s has cured you",GetPlayerClassName(playerid), GetPlayerNameEx(playerid));
+				GameTextForPlayer(lookupid,string,3500,5);
+				format(str,sizeof str,""chat""COL_LGREEN" VIP %s has cured %s",GetPlayerClassName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid));
 				SendClientMessageToAll(-1,str);
 				GivePlayerXP(playerid,20);
 			}
@@ -3877,11 +3728,11 @@ CMD:vheal(playerid,params[])
 		{
 			if (pInfo[playerid][pVipLevel] >= 2)
 			{
-				new targetid,string[128],str[256];
-				if (sscanf(params,"u", targetid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /vheal [playerid]");
+				new lookupid,string[128],str[256];
+				if (sscanf(params,"u", lookupid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /vheal [playerid]");
 				new Float:hp;
-				GetPlayerHealth(targetid,hp);
-				if (pInfo[targetid][pTeam] == TEAM_HUMAN)
+				GetPlayerHealth(lookupid,hp);
+				if (pInfo[lookupid][pTeam] == TEAM_HUMAN)
 				{
 					if (hp >= 80)
 					{
@@ -3891,10 +3742,10 @@ CMD:vheal(playerid,params[])
 					{
 						if (pInfo[playerid][pVipLevel] >= 4)
 						{
-							SetPlayerHealth(targetid,hp+40);
-							format(string, sizeof string,"~n~~n~~n~~n~~g~%s~w~ %s has healed you (by %.2f HP)",GetPlayerClassName(playerid),PlayerName(playerid),hp);
-							GameTextForPlayer(targetid,string,3500,5);
-							format(str,sizeof(str),""chat""COL_LGREEN" %s %s has healed %s by (NEW HP: %.2f HP)",GetPlayerClassName(playerid),PlayerName(playerid),PlayerName(targetid),hp);
+							SetPlayerHealth(lookupid,hp+40);
+							format(string, sizeof string,"~n~~n~~n~~n~~g~%s~w~ %s has healed you (by %.2f HP)",GetPlayerClassName(playerid), GetPlayerNameEx(playerid),hp);
+							GameTextForPlayer(lookupid,string,3500,5);
+							format(str,sizeof str,""chat""COL_LGREEN" %s %s has healed %s by (NEW HP: %.2f HP)",GetPlayerClassName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid),hp);
 							SendClientMessageToAll(-1,str);
 							GivePlayerXP(playerid,35);
 							Abilitys[playerid][HealCoolDown] = gettime();
@@ -3942,7 +3793,7 @@ CMD:vdj(playerid, params[])
 	{
 		new string[128];
 		if (sscanf(params, "s[256]", params)) return SendClientMessage(playerid, -1, "{C0C0C0}USAGE: /vdj [Link]");
-		format(string, sizeof string, "{B266FF}(VIP){ffffff}DJ %s {BA55D3}is playing some music!",PlayerName(playerid), params);
+		format(string, sizeof string, "{B266FF}(VIP){ffffff}DJ %s {BA55D3}is playing some music!", GetPlayerNameEx(playerid), params);
 		SendClientMessageToAll(COLOR_PURPLE,string);
 		foreach(new i : Player) PlayAudioStreamForPlayer(i, params);
 	}
@@ -3953,7 +3804,7 @@ CMD:me(playerid, params[])
 {
 	new action[200];
 	if (sscanf(params,"s[200]", action))return SendClientMessage(playerid, -1, "{C0C0C0}USAGE: /me [action]");
-	format(action, sizeof(action), "{FF9933}** %s %s", PlayerName(playerid), action);
+	format(action, sizeof(action), "{FF9933}** %s %s", GetPlayerNameEx(playerid), action);
 	SendClientMessageToAll(COLOR_WHITE, action);
 	return 1;
 }
@@ -3991,7 +3842,7 @@ CMD:aod(playerid)
 			aduty[playerid] = 1;
 
 			new adutyonstring[128];
-			format(adutyonstring, sizeof(adutyonstring), "{33FF33}%s %s is now Admin On Duty !" ,GetAdminRankName(playerid),PlayerName(playerid));
+			format(adutyonstring, sizeof(adutyonstring), "{33FF33}%s %s is now Admin On Duty !" ,GetAdminRankName(playerid), GetPlayerNameEx(playerid));
 			SendClientMessageToAll(-1,adutyonstring);
 			SetPlayerColor(playerid,0x99FF33FF);
 			SetPlayerHealth(playerid,999999.0);
@@ -4008,7 +3859,7 @@ CMD:aod(playerid)
 				{
 				aduty[playerid] = 0;
 				new adutyoffstring[128];
-				format(adutyoffstring, sizeof(adutyoffstring), "%s %s is now Admin Off Duty !" ,GetAdminRankName(playerid),PlayerName(playerid));
+				format(adutyoffstring, sizeof(adutyoffstring), "%s %s is now Admin Off Duty !" ,GetAdminRankName(playerid), GetPlayerNameEx(playerid));
 				Delete3DTextLabel(labeladminduty[playerid]);
 				SetPVarInt(playerid, "aduty147", 0);
 				SendClientMessageToAll(-1,adutyoffstring);
@@ -4030,8 +3881,8 @@ CMD:aod(playerid)
 	else if (pInfo[playerid][pLogged] == 0)
 	{
 		SendClientMessage(playerid,-1,"{FFFFFF}[{B3432B}KICKED{FFFFFF}] You must be logged in");
-		printf("%s has been kicked for trying to use a command without being logged in!", PlayerName(playerid));
-		SetTimerEx("KickTimer", 1000, false, "i", playerid);
+		printf("%s has been kicked for trying to use a command without being logged in!", GetPlayerNameEx(playerid));
+		KickPlayer(playerid);
 	}
 	return 1;
 }
@@ -4074,7 +3925,6 @@ CMD:spec(playerid,params[])
 				}
 				PlayerSpectatePlayer(playerid,id);
 			}
-			GetPlayerName(id, Name, sizeof(Name));
 			format(String, sizeof String,"{ffffff}You have started to spectate %s.",Name);
 			SendClientMessage(playerid,0x0080C0FF,String);
 			IsSpecing[playerid] = 1;
@@ -4085,8 +3935,8 @@ CMD:spec(playerid,params[])
 	}
 	else if (pInfo[playerid][pLogged] == 0)
 	{
-		printf("%s has been kicked for trying to use a command without being logged in!", PlayerName(playerid));
-		SetTimerEx("KickTimer", 1000, false, "i", playerid);
+		printf("%s has been kicked for trying to use a command without being logged in!", GetPlayerNameEx(playerid));
+		KickPlayer(playerid);
 	}
 	return 1;
 }
@@ -4113,46 +3963,39 @@ CMD:specoff(playerid, params[])
 	}
 	else if (pInfo[playerid][pLogged] == 0)
 	{
-		printf("%s has been kicked for trying to use a command without being logged in!", PlayerName(playerid));
-		SetTimerEx("KickTimer", 1000, false, "i", playerid);
+		printf("%s has been kicked for trying to use a command without being logged in!", GetPlayerNameEx(playerid));
+		KickPlayer(playerid);
 	}
 	return 1;
 }
 
 CMD:freeze(playerid,params[])
 {
-	if (pInfo[playerid][pLogged] == 1)
-	{
-		if (pInfo[playerid][pAdminLevel] >= 1)
-		{
-				new Target;
-				if (sscanf(params, "u", Target)) SendClientMessage(playerid, COLOR_LIGHTBLUE, "{C0C0C0}USAGE: /freeze [playerid]");
-				if (!IsPlayerConnected(Target))
-					return SendClientMessage(playerid, COLOR_GREY, ""chat"{FF0000}Player is not online.");
-				if (!sscanf(params, "u", Target))
-				{
-					if (pInfo[Target][pAdminLevel] > pInfo[playerid][pAdminLevel]) return SendClientMessage(playerid,COLOR_RED,"ERROR: You cant perform this on Admins that are higher than your level!"); // if the player you're performing this command on has a higher level as you, return a message, you ain't able to freeze him
-					new tname[MAX_PLAYER_NAME];
-					GetPlayerName(Target,tname,sizeof(tname));
-					new pname[MAX_PLAYER_NAME];
-					GetPlayerName(playerid,pname,sizeof(pname));
-					new tstring[128];
-					new pstring[128];
-					format(tstring,sizeof(tstring),"{FF0000}You have been frozen by %s %s",GetAdminRankName(playerid),pname);
-					format(pstring,sizeof(pstring),"{FF0000}You have frozen player %s(%d)",tname,Target);
-					SendClientMessage(Target,COLOR_RED,tstring);
-					SendClientMessage(playerid,COLOR_RED,pstring);
-					TogglePlayerControllable(Target,0);
-					pInfo[Target][Frozen] = 1;
-				}
+	if (pInfo[playerid][pLogged] == 1) {
+		if (pInfo[playerid][pAdminLevel] >= 1) {
+			new Target;
+			if (sscanf(params, "u", Target)) SendClientMessage(playerid, COLOR_LIGHTBLUE, "{C0C0C0}USAGE: /freeze [playerid]");
+			
+			if (!IsPlayerConnected(Target)) return SendClientMessage(playerid, COLOR_GREY, ""chat"{FF0000}Player is not online.");
+			
+			if (pInfo[Target][pAdminLevel] > pInfo[playerid][pAdminLevel]) return SendClientMessage(playerid,COLOR_RED,"ERROR: You cant perform this on Admins that are higher than your level!"); // if the player you're performing this command on has a higher level as you, return a message, you ain't able to freeze him
+			
+			new string[144];
+			format(string, sizeof string,"{FF0000}You have been frozen by %s %s", GetAdminRankName(playerid), GetPlayerNameEx(playerid));
+			SendClientMessage(playerid, COLOR_RED, string);
 
+			format(string, sizeof string,"{FF0000}You have frozen player %s(%d)", GetPlayerNameEx(Target), Target);
+			SendClientMessage(Target, COLOR_RED, string);
+
+			TogglePlayerControllable(Target, false);
+			pInfo[Target][Frozen] = 1;
 		}
-		else return SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		else return SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	else if (pInfo[playerid][pLogged] == 0)
 	{
-		printf("%s has been kicked for trying to use a command without being logged in!", PlayerName(playerid));
-		SetTimerEx("KickTimer", 1000, false, "i", playerid);
+		printf("%s has been kicked for trying to use a command without being logged in!", GetPlayerNameEx(playerid));
+		KickPlayer(playerid);
 	}
 	return 1;
 }
@@ -4165,22 +4008,18 @@ CMD:unfreeze(playerid,params[])
 		if (sscanf(params, "u", Target)) return SendClientMessage(playerid, COLOR_LIGHTBLUE, "{C0C0C0}USAGE: /freeze [playerid]");
 		if (!IsPlayerConnected(Target))
 			return SendClientMessage(playerid, COLOR_GREY, ""chat"{FF0000} Player is not online.");
-		if (!sscanf(params, "u", Target))
-		{
-			new tname[MAX_PLAYER_NAME];
-			GetPlayerName(Target,tname,sizeof(tname));
-			new pname[MAX_PLAYER_NAME];
-			GetPlayerName(playerid,pname,sizeof(pname));
-			new tstring[128];
-			new pstring[128];
-			new astring[128];
-			format(tstring,sizeof(tstring),"{DC143C}You have been unfrozen by %s %s",GetAdminRankName(playerid),pname);
-			format(pstring,sizeof(pstring),"{FF0000}You have unfrozen player %s(%d)",tname,Target);
-			format(astring,sizeof(astring),"{DC143C}%s %s has unfrozen %s",GetAdminRankName(playerid),pname,tname);
-			SendClientMessage(Target,COLOR_RED,tstring);
-			SendClientMessage(playerid,COLOR_RED,pstring);
-			SendClientMessageToAll(COLOR_RED,astring);
-			TogglePlayerControllable(Target,1);
+		if (!sscanf(params, "u", Target)) {			
+			new tstring[128], pstring[128], astring[128];
+			
+			format(tstring,sizeof(tstring),"{DC143C}You have been unfrozen by %s %s", GetAdminRankName(playerid), GetPlayerNameEx(playerid));
+			format(pstring,sizeof(pstring),"{FF0000}You have unfrozen player %s(%d)", GetPlayerNameEx(Target), Target);
+			format(astring,sizeof(astring),"{DC143C}%s %s has unfrozen %s", GetAdminRankName(playerid), GetPlayerNameEx(playerid), GetPlayerNameEx(Target));
+			
+			SendClientMessage(Target, COLOR_RED, tstring);
+			SendClientMessage(playerid, COLOR_RED, pstring);
+			SendClientMessageToAll(COLOR_RED, astring);
+
+			TogglePlayerControllable(Target, true);
 			pInfo[Target][Frozen] = 0;
 		}
 		if (pInfo[Target][pTeam] == TEAM_HUMAN)
@@ -4205,8 +4044,8 @@ CMD:unfreeze(playerid,params[])
 	}
 	else if (pInfo[playerid][pLogged] == 0)
 	{
-		printf("%s has been kicked for trying to use a command without being logged in!", PlayerName(playerid));
-		SetTimerEx("KickTimer", 1000, false, "i", playerid);
+		printf("%s has been kicked for trying to use a command without being logged in!", GetPlayerNameEx(playerid));
+		KickPlayer(playerid);
 	}
 	return 1;
 }
@@ -4229,18 +4068,18 @@ CMD:getid(playerid,params[])
 	{
 		new lookup[MAX_PLAYER_NAME];
 		if (sscanf(params, "s[24]", lookup)) return SendClientMessage(playerid, -1, "{C0C0C0}USAGE: /getid [Playername] ");
-		new string[80], playername[MAX_PLAYER_NAME], namelen, bool:searched=false;
+		new string[80], namelen, bool:searched=false;
 		format(string, sizeof string,""chat" Searched for: \"%s\"", lookup);
 		SendClientMessage(playerid, -1,string);
 		foreach(new i : Player)
 		{
-			GetPlayerName(i, playername, MAX_PLAYER_NAME);
-			namelen = strlen(playername);
+			namelen = strlen(GetPlayerNameEx(i));
+			
 			for(new pos; pos <= namelen; pos++)
 			{
-				if (strfind(playername,params,true) == pos)
+				if (strfind(GetPlayerNameEx(i), params, true) == pos)
 				{
-					format(string, sizeof string,""chat" %s (ID: %d)",playername,i);
+					format(string, sizeof string,""chat" %s (ID: %d)", GetPlayerNameEx(i), i);
 					SendClientMessage(playerid, -1 ,string);
 					searched = true;
 					break;
@@ -4251,7 +4090,7 @@ CMD:getid(playerid,params[])
 		if (!searched) SendClientMessage(playerid, -1, ""chat" No Players Localized!");
 	}
 	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
@@ -4263,11 +4102,11 @@ CMD:clearchat(playerid,params[])
 		new string[256];
 
 		ClearChat();
-		format(string, sizeof string, "{DC143C}%s %s has cleared the chat.",GetAdminRankName(playerid),PlayerName(playerid));
+		format(string, sizeof string, "{DC143C}%s %s has cleared the chat.",GetAdminRankName(playerid), GetPlayerNameEx(playerid));
 		SendClientMessageToAll(-1,string);
 	}
 	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
@@ -4281,7 +4120,7 @@ CMD:nextmap(playerid,params[])
 			new map,stringmap[256];
 			if (sscanf(params,"i", map)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /nextmap [mapid]");
 
-			format(stringmap,sizeof(stringmap),"{DC143C}%s %s has set next map id to %i.",GetAdminRankName(playerid),PlayerName(playerid),map);
+			format(stringmap,sizeof(stringmap),"{DC143C}%s %s has set next map id to %i.",GetAdminRankName(playerid), GetPlayerNameEx(playerid),map);
 			SendClientMessageToAll(-1,stringmap);
 			gMapID = map;
 		}
@@ -4293,27 +4132,27 @@ CMD:megaslap(playerid,params[])
 {
 	if (pInfo[playerid][pAdminLevel] >= 3 || IsPlayerAdmin(playerid))
 	{
-		new targetid,string[256];
-		if (sscanf(params, "u", targetid)) return  SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /slap [playerid]");
-		if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+		new lookupid,string[256];
+		if (sscanf(params, "u", lookupid)) return  SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /slap [playerid]");
+		if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 
 		new Float:posxx[3];
-		GetPlayerPos(targetid, posxx[0], posxx[1], posxx[2]);
-		SetPlayerPos(targetid, posxx[0], posxx[1], posxx[2]+40);
+		GetPlayerPos(lookupid, posxx[0], posxx[1], posxx[2]);
+		SetPlayerPos(lookupid, posxx[0], posxx[1], posxx[2]+40);
 
 		if (IsPlayerAdmin(playerid))
 		{
-			format(string, sizeof string, ""chat" RCON Admin has mega slapped %s",PlayerName(targetid));
+			format(string, sizeof string, ""chat" RCON Admin has mega slapped %s",GetPlayerNameEx(lookupid));
 			SendClientMessageToAll(-1,string);
 		}
 		else
 		{
-			format(string, sizeof string, "{DC143C}%s %s has mega slapped %s",GetAdminRankName(playerid),PlayerName(playerid),PlayerName(targetid));
+			format(string, sizeof string, "{DC143C}%s %s has mega slapped %s",GetAdminRankName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid));
 			SendClientMessageToAll(-1,string);
 		}
 	}
 	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
@@ -4322,28 +4161,28 @@ CMD:slap(playerid,params[])
 {
 	if (pInfo[playerid][pAdminLevel] >= 1 || IsPlayerAdmin(playerid))
 	{
-		new targetid,string[256],height;
-		if (sscanf(params, "ud", targetid, height)) return  SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /slap [playerid] [height]");
+		new lookupid,string[256],height;
+		if (sscanf(params, "ud", lookupid, height)) return  SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /slap [playerid] [height]");
 		if (height < 0 || height > 10) return SendClientMessage(playerid, -1, "{DC143C}ERROR: The Height should be between 0-10.");
-		if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+		if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 
 		new Float:posxx[3];
-		GetPlayerPos(targetid, posxx[0], posxx[1], posxx[2]);
-		SetPlayerPos(targetid, posxx[0], posxx[1], posxx[2]+height);
+		GetPlayerPos(lookupid, posxx[0], posxx[1], posxx[2]);
+		SetPlayerPos(lookupid, posxx[0], posxx[1], posxx[2]+height);
 
 		if (IsPlayerAdmin(playerid))
 		{
-			format(string, sizeof string, ""chat" RCON Admin has slapped %s",PlayerName(targetid));
+			format(string, sizeof string, ""chat" RCON Admin has slapped %s",GetPlayerNameEx(lookupid));
 			SendClientMessageToAll(-1,string);
 		}
 		else
 		{
-			format(string, sizeof string, "{DC143C}%s %s has slapped %s",GetAdminRankName(playerid),PlayerName(playerid),PlayerName(targetid));
+			format(string, sizeof string, "{DC143C}%s %s has slapped %s",GetAdminRankName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid));
 			SendClientMessageToAll(-1,string);
 		}
 	}
 	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
@@ -4358,11 +4197,11 @@ CMD:a(playerid,params[])
 			SendClientMessage(playerid, -1, "{C0C0C0}USAGE: /a [message]");
 			return 1;
 		}
-		format(adminstring, sizeof(adminstring), "{ffffff}[{00FF00}ADMIN CHAT{ffffff}]%s(%d): %s",PlayerName(playerid), playerid, params);
+		format(adminstring, sizeof(adminstring), "{ffffff}[{00FF00}ADMIN CHAT{ffffff}]%s(%d): %s", GetPlayerNameEx(playerid), playerid, params);
 		SendMessageToAllAdmins(adminstring, -1);
 	}
 	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
@@ -4371,28 +4210,28 @@ CMD:warn(playerid,params[])
 {
 	if (pInfo[playerid][pAdminLevel] >= 1 || IsPlayerAdmin(playerid))
 	{
-		new targetid,reason[105],string[256];
-		if (sscanf(params, "us[105]", targetid, reason)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /warn [playerid] [reason]");
-		if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+		new lookupid,reason[105],string[256];
+		if (sscanf(params, "us[105]", lookupid, reason)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /warn [playerid] [reason]");
+		if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 
 		new sentstring[128];
 
-		pInfo[targetid][pWarnings]++;
+		pInfo[lookupid][pWarnings]++;
 
-		format(string, sizeof string, "%s %s has warned you!\n\n{DC143C}Reason{ffffff}: %s\n{DC143C}Warning Number{ffffff}: %i",GetAdminRankName(playerid),PlayerName(playerid), reason, pInfo[targetid][pWarnings]);
-		ShowPlayerDialog(targetid,DIALOG_WARN,DIALOG_STYLE_MSGBOX,"Warning!",string,"Apologize","");
-		format(sentstring,sizeof(sentstring), "{DC143C}%s %s has warned %s Reason: %s (%i / 3)",GetAdminRankName(playerid),PlayerName(playerid),PlayerName(targetid),reason,pInfo[targetid][pWarnings]);
+		format(string, sizeof string, "%s %s has warned you!\n\n{DC143C}Reason{ffffff}: %s\n{DC143C}Warning Number{ffffff}: %i",GetAdminRankName(playerid), GetPlayerNameEx(playerid), reason, pInfo[lookupid][pWarnings]);
+		ShowPlayerDialog(lookupid,DIALOG_WARN,DIALOG_STYLE_MSGBOX,"Warning!",string,"Apologize","");
+		format(sentstring,sizeof(sentstring), "{DC143C}%s %s has warned %s Reason: %s (%i / 3)",GetAdminRankName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid),reason,pInfo[lookupid][pWarnings]);
 		SendClientMessageToAll(-1,sentstring);
 
-		if (pInfo[targetid][pWarnings] >= 3)
+		if (pInfo[lookupid][pWarnings] >= 3)
 		{
-			format(string, sizeof string, "{DC143C}%s %s has kicked %s Reason: %s (3 Warnings EXCEEDED)",GetAdminRankName(playerid),PlayerName(playerid),PlayerName(targetid),reason);
+			format(string, sizeof string, "{DC143C}%s %s has kicked %s Reason: %s (3 Warnings EXCEEDED)",GetAdminRankName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid),reason);
 			SendClientMessageToAll(-1,string);
-			SetTimerEx("KickTimer", 1000, false, "i", targetid);
+			SetTimerEx("KickTimer", 1000, false, "i", lookupid);
 		}
 	}
 	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
@@ -4401,26 +4240,26 @@ CMD:unwarn(playerid,params[])
 {
 	if (pInfo[playerid][pAdminLevel] >= 1 || IsPlayerAdmin(playerid))
 	{
-		new targetid,reason[105],string[256];
-		if (sscanf(params, "us[105]", targetid, reason)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /unwarn [playerid] [reason]");
-		if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+		new lookupid,reason[105],string[256];
+		if (sscanf(params, "us[105]", lookupid, reason)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /unwarn [playerid] [reason]");
+		if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 
 		new sentstring[128];
 
-		if (pInfo[targetid][pWarnings] >= 1)
+		if (pInfo[lookupid][pWarnings] >= 1)
 		{
-			pInfo[targetid][pWarnings]--;
+			pInfo[lookupid][pWarnings]--;
 		}
 		else return SendClientMessage(playerid, -1,""chat" Player has no warning(s).");
 
-		format(string, sizeof string, "%s %s has unwarned you!\n\n{DC143C}Reason{ffffff}: %s",GetAdminRankName(playerid),PlayerName(playerid), reason);
-		ShowPlayerDialog(targetid,DIALOG_WARN,DIALOG_STYLE_MSGBOX,"Warning! Removed",string,"Thanks","");
-		format(sentstring,sizeof(sentstring), "{DC143C}%s %s has unwarned %s Reason: %s (%i / 3)",GetAdminRankName(playerid),PlayerName(playerid),PlayerName(targetid),reason,pInfo[targetid][pWarnings]);
+		format(string, sizeof string, "%s %s has unwarned you!\n\n{DC143C}Reason{ffffff}: %s",GetAdminRankName(playerid), GetPlayerNameEx(playerid), reason);
+		ShowPlayerDialog(lookupid,DIALOG_WARN,DIALOG_STYLE_MSGBOX,"Warning! Removed",string,"Thanks","");
+		format(sentstring,sizeof(sentstring), "{DC143C}%s %s has unwarned %s Reason: %s (%i / 3)",GetAdminRankName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid),reason,pInfo[lookupid][pWarnings]);
 		SendClientMessageToAll(-1,sentstring);
 
 	}
 	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
@@ -4429,17 +4268,17 @@ CMD:akill(playerid,params[])
 {
 	if (pInfo[playerid][pAdminLevel] >= 1)
 	{
-		new targetid,string[256];
-		if (sscanf(params, "u", targetid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /akill [playerid]");
-		if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+		new lookupid,string[256];
+		if (sscanf(params, "u", lookupid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /akill [playerid]");
+		if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 
-		SetPlayerHealth(targetid,0.0);
+		SetPlayerHealth(lookupid,0.0);
 
-		format(string, sizeof string, "{DC143C}%s %s has killed %s",GetAdminRankName(playerid),PlayerName(playerid),PlayerName(targetid));
+		format(string, sizeof string, "{DC143C}%s %s has killed %s",GetAdminRankName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid));
 		SendClientMessageToAll(-1,string);
 	}
 	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
@@ -4448,20 +4287,20 @@ CMD:mute(playerid,params[])
 {
 	if (pInfo[playerid][pAdminLevel] >= 1)
 	{
-		new targetid,reason[105],string[128];
-		if (sscanf(params, "us[105]", targetid,reason)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /mute [playerid] [reason]");
-		if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+		new lookupid,reason[105],string[128];
+		if (sscanf(params, "us[105]", lookupid,reason)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /mute [playerid] [reason]");
+		if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 
-		pInfo[targetid][IsPlayerMuted] = 1;
+		pInfo[lookupid][IsPlayerMuted] = 1;
 
-		format(string, sizeof string,"{DC143C}%s %s has muted %s [Reason: %s]",GetAdminRankName(playerid),PlayerName(playerid),PlayerName(targetid),reason);
+		format(string, sizeof string,"{DC143C}%s %s has muted %s [Reason: %s]",GetAdminRankName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid),reason);
 		SendMessageToAllAdmins(string,-1);
 
-		format(string, sizeof string,"{DC143C}%s %s muted you for [Reason %s]",GetAdminRankName(playerid),PlayerName(playerid),reason);
-		SendClientMessage(targetid,-1,string);
+		format(string, sizeof string,"{DC143C}%s %s muted you for [Reason %s]",GetAdminRankName(playerid), GetPlayerNameEx(playerid),reason);
+		SendClientMessage(lookupid,-1,string);
 	}
 	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
@@ -4470,17 +4309,17 @@ CMD:unmute(playerid,params[])
 {
 	if (pInfo[playerid][pAdminLevel] >= 1)
 	{
-		new targetid,string[128];
-		if (sscanf(params, "u", targetid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /unmute [playerid]");
-		if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+		new lookupid,string[128];
+		if (sscanf(params, "u", lookupid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /unmute [playerid]");
+		if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 
-		if (pInfo[targetid][IsPlayerMuted] == 1)
+		if (pInfo[lookupid][IsPlayerMuted] == 1)
 		{
-			format(string, sizeof string,"{DC143C}%s %s has unmuted you",GetAdminRankName(playerid),PlayerName(playerid));
-			SendClientMessage(targetid,-1,string);
-			format(string, sizeof string,""chat" You unmuted %s",PlayerName(targetid));
+			format(string, sizeof string,"{DC143C}%s %s has unmuted you",GetAdminRankName(playerid), GetPlayerNameEx(playerid));
+			SendClientMessage(lookupid,-1,string);
+			format(string, sizeof string,""chat" You unmuted %s",GetPlayerNameEx(lookupid));
 			SendClientMessage(playerid,-1,string);
-			pInfo[targetid][IsPlayerMuted] = 0;
+			pInfo[lookupid][IsPlayerMuted] = 0;
 		}
 		else
 		{
@@ -4488,7 +4327,7 @@ CMD:unmute(playerid,params[])
 		}
 	}
 	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
@@ -4539,19 +4378,19 @@ CMD:kick(playerid,params[])
 {
 	if (pInfo[playerid][pAdminLevel] >= 1)
 	{
-		new targetid,reason[105],string[256];
-		if (sscanf(params, "us[105]", targetid,reason)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /kick [playerid] [reason]");
-		if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+		new lookupid,reason[105],string[256];
+		if (sscanf(params, "us[105]", lookupid,reason)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /kick [playerid] [reason]");
+		if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 
-		format(string, sizeof string, "{DC143C}%s %s has kicked %s [Reason: %s]",GetAdminRankName(playerid),PlayerName(playerid),PlayerName(targetid),reason);
+		format(string, sizeof string, "{DC143C}%s %s has kicked %s [Reason: %s]",GetAdminRankName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid),reason);
 		SendClientMessageToAll(-1,string);
 
-		format(string, sizeof string, "You are kicked from the server!\n\n{DC143C}Kicked by{ffffff}: %s\n{DC143C}Reason{ffffff}: %s",PlayerName(playerid), reason);
-		ShowPlayerDialog(targetid,DIALOG_KICKN,DIALOG_STYLE_MSGBOX,"{DC143C}KICKED",string,"Close","");
-		SetTimerEx("KickTimer", 1000, false, "i", targetid);
+		format(string, sizeof string, "You are kicked from the server!\n\n{DC143C}Kicked by{ffffff}: %s\n{DC143C}Reason{ffffff}: %s", GetPlayerNameEx(playerid), reason);
+		ShowPlayerDialog(lookupid,DIALOG_KICKN,DIALOG_STYLE_MSGBOX,"{DC143C}KICKED",string,"Close","");
+		SetTimerEx("KickTimer", 1000, false, "i", lookupid);
 	}
 	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
@@ -4618,47 +4457,18 @@ CMD:skip(playerid)
 	return 1;
 }
 
-CMD:ban(playerid,params[])
-{
-	if (pInfo[playerid][pAdminLevel] >= 2)
-	{
-		if (IsPlayerConnected(playerid))
-		{
-			new targetid,reason[105],ip[50],string[256];
-			if (sscanf(params, "us[105]", targetid,reason)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /ban [playerid] [reason]");
-			if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
-
-			format(string, sizeof string, "{DC143C}%s %s has banned %s [Reason: %s]",GetAdminRankName(playerid),PlayerName(playerid),PlayerName(targetid),reason);
-			SendClientMessageToAll(-1,string);
-
-			format(string, sizeof string, "You are banned from the server!\n\n{DC143C}Banned by{ffffff}: %s\n{DC143C}Reason{ffffff}: %s\n\nYou can post Ban Appeal on our Forums:\n{FFFF33}www.samp-zombieland.info",PlayerName(playerid), reason);
-			ShowPlayerDialog(targetid,DIALOG_HELP,DIALOG_STYLE_MSGBOX,"{DC143C}BANNED",string,"Close","");
-
-			pInfo[targetid][pBanned] = 1;
-			GetPlayerIp(targetid, ip, sizeof(ip));
-			format(string, sizeof string, "banip %s",ip);
-			SetTimerEx("KickTimer", 1000, false, "i", targetid);
-		}
-	}
-	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
-	}
-	return 1;
-}
-
-forward BanTimer(playerid);
-
 CMD:ann2(playerid,params[])
 {
 	if (pInfo[playerid][pAdminLevel] >= 2 || IsPlayerAdmin(playerid))
 	{
-	if (!strlen(params)) return SendClientMessage(playerid, -1, "{C0C0C0}USAGE: /ann2 [text]");
-	if (strlen(params) > 100) return SendClientMessage(playerid, COLOR_GREY, "Your message must not exceed 100 characters");
-	new str[128];
-	SendClientMessageToAll(COLOR_LIGHTBLUE, "|~~~~~~~~~~ Admin Announcement ~~~~~~~~~~|");
-	format(str, sizeof(str), "{9999FF}%s", params);
-	SendClientMessageToAll(COLOR_GREEN, str);
-	SendClientMessageToAll(COLOR_LIGHTBLUE, "|~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~|");
+		if (!strlen(params)) return SendClientMessage(playerid, -1, "{C0C0C0}USAGE: /ann2 [text]");
+		if (strlen(params) > 100) return SendClientMessage(playerid, COLOR_GREY, "Your message must not exceed 100 characters");
+		
+		new str[128];
+		SendClientMessageToAll(COLOR_LIGHTBLUE, "|~~~~~~~~~~ Admin Announcement ~~~~~~~~~~|");
+		format(str, sizeof str, "{9999FF}%s", params);
+		SendClientMessageToAll(COLOR_GREEN, str);
+		SendClientMessageToAll(COLOR_LIGHTBLUE, "|~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~|");
 	}
 	return 1;
 }
@@ -4680,12 +4490,12 @@ CMD:settime(playerid,params[])
 		}
 		else
 		{
-			format(string, sizeof string, "{DC143C}%s %s has changed the time to %d",GetAdminRankName(playerid),PlayerName(playerid),time2);
+			format(string, sizeof string, "{DC143C}%s %s has changed the time to %d",GetAdminRankName(playerid), GetPlayerNameEx(playerid),time2);
 			SendClientMessageToAll(-1,string);
 		}
 	}
 	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
@@ -4707,12 +4517,12 @@ CMD:setweather(playerid,params[])
 		}
 		else
 		{
-			format(string, sizeof string, "{DC143C}%s %s has changed the weather to %d",GetAdminRankName(playerid),PlayerName(playerid),weather);
+			format(string, sizeof string, "{DC143C}%s %s has changed the weather to %d",GetAdminRankName(playerid), GetPlayerNameEx(playerid),weather);
 			SendClientMessageToAll(-1,string);
 		}
 	}
 	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
@@ -4721,21 +4531,21 @@ CMD:get(playerid,params[])
 {
 	if (pInfo[playerid][pAdminLevel] >= 2)
 	{
-		new targetid;
-		if (sscanf(params, "u", targetid)) SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /get [playerid]");
-		if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+		new lookupid;
+		if (sscanf(params, "u", lookupid)) SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /get [playerid]");
+		if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 
 		new Float:x, Float:y, Float:z;
 		GetPlayerPos(playerid, x, y, z);
-		SetPlayerPos(targetid, x+1, y+1, z);
+		SetPlayerPos(lookupid, x+1, y+1, z);
 
-		if (IsPlayerInAnyVehicle(targetid))
+		if (IsPlayerInAnyVehicle(lookupid))
 		{
-			SetVehiclePos(GetPlayerVehicleID(targetid),x,y,z);
+			SetVehiclePos(GetPlayerVehicleID(lookupid),x,y,z);
 		}
 	}
 	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
@@ -4744,17 +4554,17 @@ CMD:goto(playerid,params[])
 {
 	if (pInfo[playerid][pAdminLevel] >= 2)
 	{
-		new targetid;
-		if (sscanf(params, "u", targetid)) SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /goto [playerid]");
-		if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+		new lookupid;
+		if (sscanf(params, "u", lookupid)) SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /goto [playerid]");
+		if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 
 		new Float:x,Float:y,Float:z,inter;
-		GetPlayerPos(targetid,Float:x,Float:y,Float:z);
-		inter = GetPlayerInterior(targetid);
+		GetPlayerPos(lookupid,Float:x,Float:y,Float:z);
+		inter = GetPlayerInterior(lookupid);
 		SetPlayerPosEx(playerid,Float:x,Float:y,Float:z,inter,0);
 	}
 	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
@@ -4777,7 +4587,7 @@ CMD:freezeteam(playerid, params[])
 				}
 			}
 			new string[100];
-			format(string, sizeof string,"{DC143C}%s %s has frozen team {FFFFFF}Zombies",GetAdminRankName(playerid),PlayerName(playerid));
+			format(string, sizeof string,"{DC143C}%s %s has frozen team {FFFFFF}Zombies",GetAdminRankName(playerid), GetPlayerNameEx(playerid));
 			SendClientMessageToAll(-1, string);
 		}
 		//---------------------------------
@@ -4791,7 +4601,7 @@ CMD:freezeteam(playerid, params[])
 				}
 			}
 			new string[100];
-			format(string, sizeof string,"{DC143C}%s %s has frozen team {FFFFFF}Humans",GetAdminRankName(playerid),PlayerName(playerid));
+			format(string, sizeof string,"{DC143C}%s %s has frozen team {FFFFFF}Humans",GetAdminRankName(playerid), GetPlayerNameEx(playerid));
 			SendClientMessageToAll(-1, string);
 		}
 	}
@@ -4815,7 +4625,7 @@ CMD:unfreezeteam(playerid, params[])
 				}
 			}
 			new string[100];
-			format(string, sizeof string,"{DC143C}%s %s has unfrozen team {FFFFFF}Zombies",GetAdminRankName(playerid),PlayerName(playerid));
+			format(string, sizeof string,"{DC143C}%s %s has unfrozen team {FFFFFF}Zombies",GetAdminRankName(playerid), GetPlayerNameEx(playerid));
 			SendClientMessageToAll(-1, string);
 		}
 		//---------------------------------
@@ -4829,7 +4639,7 @@ CMD:unfreezeteam(playerid, params[])
 				}
 			}
 			new string[100];
-			format(string, sizeof string,"{DC143C}%s %s has unfrozen team {FFFFFF}Humans",GetAdminRankName(playerid),PlayerName(playerid));
+			format(string, sizeof string,"{DC143C}%s %s has unfrozen team {FFFFFF}Humans",GetAdminRankName(playerid), GetPlayerNameEx(playerid));
 			SendClientMessageToAll(-1, string);
 		}
 	}
@@ -4873,7 +4683,7 @@ CMD:xp(playerid,params[])
 		if (sscanf(params, "i", xpID)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /xp [XP Type ID] (1normal,2double,3triple,4quad)");
 		if (xpID < 1 || xpID > 4) return SendClientMessage(playerid, -1, "{DC143C}Invalid XP Type ID.");
 		{
-			format(string, sizeof string,"{DC143C}%s %s has changed the XP variable to %s",GetAdminRankName(playerid),PlayerName(playerid),GetXPName());
+			format(string, sizeof string,"{DC143C}%s %s has changed the XP variable to %s",GetAdminRankName(playerid), GetPlayerNameEx(playerid),GetXPName());
 			SendClientMessageToAll(-1,string);
 			
 			Map[XPType] = xpID;
@@ -4895,16 +4705,16 @@ CMD:setzombie(playerid,params[])
 	{
 		if (IsPlayerConnected(playerid))
 		{
-			new targetid,str[256];
-			if (sscanf(params, "u", targetid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /setzombie [playerid]");
-			if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+			new lookupid,str[256];
+			if (sscanf(params, "u", lookupid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /setzombie [playerid]");
+			if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 
-			ZombieSetup(targetid);
-			SpawnPlayer(targetid);
+			ZombieSetup(lookupid);
+			SpawnPlayer(lookupid);
 			CurePlayer(playerid);
-			format(str,sizeof(str),"{DC143C}%s %s(%i) has set your team to Zombie.",GetAdminRankName(playerid),PlayerName(playerid),playerid);
-			SendClientMessage(targetid,-1,str);
-			format(str,sizeof(str),""chat""COL_LGREEN" You have changed %s(%i) team to Zombie.",PlayerName(targetid),targetid);
+			format(str,sizeof str,"{DC143C}%s %s(%i) has set your team to Zombie.",GetAdminRankName(playerid), GetPlayerNameEx(playerid),playerid);
+			SendClientMessage(lookupid,-1,str);
+			format(str,sizeof str,""chat""COL_LGREEN" You have changed %s(%i) team to Zombie.",GetPlayerNameEx(lookupid),lookupid);
 			SendClientMessage(playerid,-1,str);
 		}
 	}
@@ -4917,16 +4727,16 @@ CMD:sethuman(playerid,params[])
 	{
 		if (IsPlayerConnected(playerid))
 		{
-			new targetid,str[256];
-			if (sscanf(params, "u", targetid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /sethuman [playerid]");
-			if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+			new lookupid,str[256];
+			if (sscanf(params, "u", lookupid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /sethuman [playerid]");
+			if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 
-			HumanSetup(targetid);
-			SpawnPlayer(targetid);
+			HumanSetup(lookupid);
+			SpawnPlayer(lookupid);
 			CurePlayer(playerid);
-			format(str,sizeof(str),"{DC143C}%s %s(%i) has set your team to Human.",GetAdminRankName(playerid),PlayerName(playerid),playerid);
-			SendClientMessage(targetid,-1,str);
-			format(str,sizeof(str),""chat""COL_LGREEN" You have changed %s(%i) team to Human.",PlayerName(targetid),targetid);
+			format(str,sizeof str,"{DC143C}%s %s(%i) has set your team to Human.",GetAdminRankName(playerid), GetPlayerNameEx(playerid),playerid);
+			SendClientMessage(lookupid,-1,str);
+			format(str,sizeof str,""chat""COL_LGREEN" You have changed %s(%i) team to Human.",GetPlayerNameEx(lookupid),lookupid);
 			SendClientMessage(playerid,-1,str);
 		}
 	}
@@ -4949,16 +4759,16 @@ CMD:ip(playerid, params[])
 {
 	if (pInfo[playerid][pAdminLevel] >= 3)
 	{
-		new targetid,playerip[16],string[128];
-		if (sscanf(params, "u", targetid, playerip)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /ip [playerid]");
-		if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+		new lookupid,playerip[16],string[128];
+		if (sscanf(params, "u", lookupid, playerip)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /ip [playerid]");
+		if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 
-		GetPlayerIp(targetid, playerip, sizeof(playerip));
-		format(string, sizeof string, ""chat" IP of %s %s", PlayerName(targetid), playerip);
+		GetPlayerIp(lookupid, playerip, sizeof(playerip));
+		format(string, sizeof string, ""chat" IP of %s %s", GetPlayerNameEx(lookupid), playerip);
 		SendClientMessage(playerid, -1, string);
 	}
 	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
@@ -4970,25 +4780,25 @@ CMD:givexp(playerid,params[])
 	{
 		if (pInfo[playerid][pAdminLevel] >= 4)
 		{
-			new targetid,givexp,string[256];
-			if (sscanf(params, "ui", targetid, givexp)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /givexp [playerid] [amount]");
-			if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+			new lookupid,givexp,string[256];
+			if (sscanf(params, "ui", lookupid, givexp)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /givexp [playerid] [amount]");
+			if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 
 			if (givexp < -2000 || givexp > 2000) return SendClientMessage(playerid,-1,""chat"  You can only give XP between Negative 2000 - Positive 2000.");
-			pInfo[targetid][pXP] += givexp;
+			pInfo[lookupid][pXP] += givexp;
 
-			format(string, sizeof string, "{DC143C}%s %s has given %s %d XP.",GetAdminRankName(playerid),PlayerName(playerid),PlayerName(targetid),givexp);
+			format(string, sizeof string, "{DC143C}%s %s has given %s %d XP.",GetAdminRankName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid),givexp);
 			SendClientMessageToAll(-1,string);
 			SetPlayerScore(playerid,pInfo[playerid][pXP]);
 			UpdateXPTextdraw(playerid);
 		}
 		else {
-			SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+			SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 		}
 	}
 	else {
 		SendClientMessage(playerid,-1,""chat" Your not logged in.");
-		SetTimerEx("KickTimer", 1000, false, "i", playerid);
+		KickPlayer(playerid);
 	}
 	return 1;
 }
@@ -5006,16 +4816,16 @@ CMD:givecash(playerid, params[])
 		new string[100];
 		GivePlayerMoney(targetplayer, amount);
 		pInfo[targetplayer][pCash] += amount;
-		format(string, sizeof string, "{DC143C}%s %s gave you $%i.", GetAdminRankName(playerid),PlayerName(playerid),amount);
+		format(string, sizeof string, "{DC143C}%s %s gave you $%i.", GetAdminRankName(playerid), GetPlayerNameEx(playerid),amount);
 		SendClientMessage(targetplayer, COLOR_GREEN, string);
 		}
 		else {
-			SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+			SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 		}
 	}
 	else {
 		SendClientMessage(playerid,-1,""chat" Your not logged in.");
-		SetTimerEx("KickTimer", 1000, false, "i", playerid);
+		KickPlayer(playerid);
 	}
 	return 1;
 }
@@ -5026,24 +4836,24 @@ CMD:givetokens(playerid,params[])
 	{
 		if (pInfo[playerid][pAdminLevel] >= 4)
 		{
-			new targetid,givecoin,string[256];
-			if (sscanf(params, "ui", targetid, givecoin)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /givetokens [playerid] [amount]");
-			if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+			new lookupid,givecoin,string[256];
+			if (sscanf(params, "ui", lookupid, givecoin)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /givetokens [playerid] [amount]");
+			if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 
 			if (givecoin < 1 || givecoin > 10) return SendClientMessage(playerid,-1,""chat" You can only give coins between 1 and 10.");
-			pInfo[targetid][pCoins] += givecoin;
+			pInfo[lookupid][pCoins] += givecoin;
 			UpdateTokensTextdraw(playerid);
 
-			format(string, sizeof string, "{DC143C}%s %s has given %s %d Tokens.",GetAdminRankName(playerid),PlayerName(playerid),PlayerName(targetid),givecoin);
+			format(string, sizeof string, "{DC143C}%s %s has given %s %d Tokens.",GetAdminRankName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid),givecoin);
 			SendClientMessageToAll(-1,string);
 		}
 		else {
-			SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+			SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 		}
 	}
 	else {
 		SendClientMessage(playerid,-1,""chat" Your not logged in.");
-		SetTimerEx("KickTimer", 1000, false, "i", playerid);
+		KickPlayer(playerid);
 	}
 	return 1;
 }
@@ -5054,24 +4864,24 @@ CMD:setxp(playerid,params[])
 	{
 		if (pInfo[playerid][pAdminLevel] >= 4)
 		{
-			new targetid,givexp,string[256];
-			if (sscanf(params, "ui", targetid, givexp)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /setxp [playerid] [amount]");
-			if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+			new lookupid,givexp,string[256];
+			if (sscanf(params, "ui", lookupid, givexp)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /setxp [playerid] [amount]");
+			if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 
-			pInfo[targetid][pXP] = givexp;
+			pInfo[lookupid][pXP] = givexp;
 			SetPlayerScore(playerid,pInfo[playerid][pXP]);
 			UpdateXPTextdraw(playerid);
 
-			format(string, sizeof string, "{DC143C}%s %s has set %s XP to %d",GetAdminRankName(playerid),PlayerName(playerid),PlayerName(targetid),givexp);
+			format(string, sizeof string, "{DC143C}%s %s has set %s XP to %d",GetAdminRankName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid),givexp);
 			SendClientMessageToAll(-1,string);
 		}
 		else {
-			SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+			SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 		}
 	}
 	else {
 		SendClientMessage(playerid,-1,""chat" Your not logged in.");
-		SetTimerEx("KickTimer", 1000, false, "i", playerid);
+		KickPlayer(playerid);
 	}
 	return 1;
 }
@@ -5081,18 +4891,18 @@ CMD:setadmin(playerid,params[])
 {
 	if (pInfo[playerid][pAdminLevel] >= 5)
 	{
-		new targetid,level,string[256];
-		if (sscanf(params, "ud", targetid, level)) return  SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /setlevel [playerid] [level]");
-		if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+		new lookupid,level,string[256];
+		if (sscanf(params, "ud", lookupid, level)) return  SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /setlevel [playerid] [level]");
+		if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 		if (level < 0 || level > 5) return SendClientMessage(playerid,-1,""chat" Administrator levels are ONLY between 1-5.");
 
-		pInfo[targetid][pAdminLevel] = level;
+		pInfo[lookupid][pAdminLevel] = level;
 
-		format(string, sizeof string, "{DC143C}%s %s have given Admin status of %d to %s",GetAdminRankName(playerid),PlayerName(playerid),level,PlayerName(targetid));
+		format(string, sizeof string, "{DC143C}%s %s have given Admin status of %d to %s",GetAdminRankName(playerid), GetPlayerNameEx(playerid),level,GetPlayerNameEx(lookupid));
 		SendClientMessageToAll(-1,string);
 	}
 	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
@@ -5128,18 +4938,18 @@ CMD:setvip(playerid,params[])
 {
 	if (pInfo[playerid][pAdminLevel] >= 5)
 	{
-		new targetid,level,string[256];
-		if (sscanf(params, "ud", targetid, level)) return  SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /setvip [playerid] [level]");
-		if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+		new lookupid,level,string[256];
+		if (sscanf(params, "ud", lookupid, level)) return  SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /setvip [playerid] [level]");
+		if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 		if (level < 0 || level > 3) return SendClientMessage(playerid,-1,""chat" VIP levels are ONLY between 0-3.");
 
-		pInfo[targetid][pVipLevel] = level;
+		pInfo[lookupid][pVipLevel] = level;
 
-		format(string, sizeof string, "{DC143C}%s %s have given VIP status to %s.",GetAdminRankName(playerid),PlayerName(playerid),PlayerName(targetid));
+		format(string, sizeof string, "{DC143C}%s %s have given VIP status to %s.",GetAdminRankName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid));
 		SendClientMessageToAll(-1,string);
 	}
 	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
@@ -5175,19 +4985,19 @@ CMD:nuke(playerid,params[])
 {
 	if (pInfo[playerid][pAdminLevel] >= 5)
 	{
-		new targetid,string[256];
-		if (sscanf(params, "u", targetid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /nuke [playerid]");
-		if (!IsPlayerConnected(targetid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+		new lookupid,string[256];
+		if (sscanf(params, "u", lookupid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /nuke [playerid]");
+		if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 
 		new Float:x,Float:y,Float:z;
-		GetPlayerPos(targetid,Float:x,Float:y,Float:z);
+		GetPlayerPos(lookupid,Float:x,Float:y,Float:z);
 		CreateExplosion(Float:x,Float:y,Float:z,0,10.0);
 
-		format(string, sizeof string, "{DC143C}%s %s has blown up %s",GetAdminRankName(playerid),PlayerName(playerid),PlayerName(targetid));
+		format(string, sizeof string, "{DC143C}%s %s has blown up %s",GetAdminRankName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid));
 		SendClientMessageToAll(-1,string);
 	}
 	else {
-		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command.!");
+		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
@@ -5282,23 +5092,79 @@ custom ConnectVars(playerid)
 	return 1;
 }
 
-custom PlayerName(playerid)
-{
-	new CName[24];
-	GetPlayerName(playerid, CName, 24);
-	return CName;
+CMD:ban(playerid, params[]) {
+	if (pInfo[playerid][pAdminLevel] < 2) return SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
+
+	new lookupid, reason[MAX_REASON_LEN];
+	if (sscanf(params, "us["#MAX_REASON_LEN"]", lookupid, reason)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /ban [playerid] [reason]");
+	if (lookupid == INVALID_PLAYER_ID) return SendClientMessage(playerid,-1,""chat" Player is not online.");
+
+	BanPlayer(lookupid, reason, playerid);
+	return 1;
 }
 
-custom BanPlayer(playerid,reason[],admin[])
-{
-	TogglePlayerControllable(playerid,0);
-	
-	new str[128];
-	format(str, sizeof str,"You have been currently banned from this server.\nUser: %s\nReason: %s\nAdmin %s\n",PlayerName(playerid),reason,admin);
-	ShowPlayerDialog(playerid,DIALOG_BANNED,DIALOG_STYLE_MSGBOX,"You have been banned!",str,"Leave","");
-	
-	BanEx(playerid, reason);
+CMD:unban(playerid, params[]) {
+	if (pInfo[playerid][pAdminLevel] < 2) return SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
+
+	new name[MAX_PLAYER_NAME];
+	if (sscanf(params, "s[24]", name)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /unban [username]");
+	if (CheckBan(name)) return SendClientMessage(playerid,-1,""chat" Ban for that username doesn't exist.");
+
+	UnbanPlayer(name);
 	return 1;
+}
+
+custom BanPlayer(playerid, reason[], adminid) {
+	new
+		string[500],
+		query[56 + MAX_PLAYER_NAME + MAX_REASON_LEN],
+		Player_Name[MAX_PLAYER_NAME],
+		Admin_Name[MAX_PLAYER_NAME] = "Anti Cheat";
+
+	TogglePlayerControllable(playerid, false);
+
+	if (adminid != INVALID_PLAYER_ID) {
+		Admin_Name[0] = GetPlayerNameEx(adminid);
+
+		format(string, sizeof string, "[{00FF80}ADMIN{FFFFFF}]: {00FF80}%s (ID:%d) has been banned from the server {FFFFFF}[{00FF80}%s{FFFFFF}]", Player_Name, playerid, reason);
+	}
+	else {
+		format(string, sizeof string, "[{00FF80}ANTI-CHEAT{FFFFFF}]: {00FF80}%s (ID:%d) has been banned from the server {FFFFFF}[{00FF80}%s{FFFFFF}]", Player_Name, playerid, reason);
+	}
+
+	format(query, sizeof query, "INSERT INTO "#TABLE_BANS" (`Name`, `Reason`) VALUES('%q', '%q')", Player_Name, reason);
+	db_free_result(db_query(gSQL, query));
+
+	SendClientMessageToAll(-1, string);
+	
+	string[0] = EOS;
+	strcat(string, "{FF0000}You're banned from the server!\n\n");
+
+	format(query, sizeof query, "{FFFFFF}Reason:{FF0000}: %s\n{FFFFFF}Banned By:{00FF80} %s\n\n", reason, Admin_Name);
+	strcat(string, query);
+	strcat(string, "{FFFFFF}You can post Ban Appeal on our Forums:\n{FFFF33}www.samp-zombieland.info\n");
+	ShowPlayerDialog(playerid, DIALOG_HELP, DIALOG_STYLE_TABLIST, "{00FF80}BANNED!", string, "Accept", "");
+	
+	return KickPlayer(playerid);
+}
+
+custom UnbanPlayer(name[]) {
+	new query[38 + MAX_PLAYER_NAME];
+
+	format(query, sizeof query, "DELETE FROM "#TABLE_BANS" WHERE `Name` = '%q'", name);
+	db_free_result(db_query(gSQL, query));
+	return 1;
+}
+
+custom CheckBan(name[]) {
+	new query[48 + MAX_PLAYER_NAME], DBResult: result, num_rows;
+
+	format(query, sizeof query, "SELECT * FROM "#TABLE_BANS" WHERE `Name` = '%q' LIMIT 1", name);
+	result = db_query(gSQL, query);
+
+	num_rows = db_num_rows(result);
+	db_free_result(result);
+	return num_rows; // Returns the number of rows (0 is not banned, anything else than 0 is banned)
 }
 
 GetXYInFrontOfPlayer(playerid, &Float:x, &Float:y, Float:distance)
@@ -5545,7 +5411,7 @@ public Float:GetDistanceBetweenPlayers(p1,p2)
 custom GetClosestPlayer(playerid)
 {
 	new
-		targetid = INVALID_PLAYER_ID,
+		lookupid = INVALID_PLAYER_ID,
 		Float: distance = 9999.0,
 		Float: distance2;
 	
@@ -5557,11 +5423,11 @@ custom GetClosestPlayer(playerid)
 		if (distance2 < distance && distance2 != -1.0)
 		{
 			distance = distance2;
-			targetid = i;
+			lookupid = i;
 		}
 	}
 	
-	return targetid;
+	return lookupid;
 }
 
 custom IsPlayerInWater(playerid)
@@ -6243,7 +6109,7 @@ custom CheckToLevelOrRankUp(killerid)
 	if (previous_rank != i)
 	{
 		new str[128];
-		format(str, sizeof str, "{D9B9DA} %s has ranked up to rank %s (%d).", PlayerName(killerid), pInfo[killerid][pRank]);
+		format(str, sizeof str, "{D9B9DA} %s has ranked up to rank %s (%d).", GetPlayerNameEx(killerid), pInfo[killerid][pRank]);
 		SendClientMessageToAll(-1, str);
 		
 		UpdateRanksTextdraw(killerid);
@@ -6354,10 +6220,9 @@ function SPS_Remove_Messages_Limit(playerid)
 {
 	if (GetPVarInt(playerid, "SPS Spam Warnings") == 1)
 	{
-		new string[128], pName[MAX_PLAYER_NAME];
-		GetPlayerName(playerid, pName, sizeof(pName));
+		new string[128];
 
-		format(string, sizeof string, "{DC143C}Player %s has been muted for %i minutes because of flooding the chat.", pName, PLAYER_MUTE_TIME_MINUTES);
+		format(string, sizeof string, "{DC143C}Player %s has been muted for %i minutes because of flooding the chat.", GetPlayerNameEx(playerid), PLAYER_MUTE_TIME_MINUTES);
 		for(new i=0; i < MAX_PLAYERS; i++) if (IsPlayerConnected(i) && i != playerid) SendClientMessage(i, -1, string);
 
 		format(string, sizeof string, "{CCFFFF}You have been muted for %i minutes because of flooding the chat.", PLAYER_MUTE_TIME_MINUTES);
@@ -6381,24 +6246,46 @@ function SPS_Unmute_Player(playerid)
 }
 
 forward RogueTimer(playerid);
-public RogueTimer(playerid)
-{
+public RogueTimer(playerid) {
+	
 	SetPlayerSkin(playerid, 137);
 	SetPlayerColor(playerid, COLOR_ZOMBIE);
+	
 	return 1;
 }
 
-custom GetPlayerClassName(playerid)
-{
+custom GetPlayerClassName(playerid) { // Added by Logic_
 	new str[16];
-	if (pInfo[playerid][pTeam] == TEAM_HUMAN)
-	{
+	if (pInfo[playerid][pTeam] == TEAM_HUMAN) {
 		format(str, sizeof str, gHumanClass[pInfo[playerid][pClass]][E_CLASS_NAME]);
 	}
-	else
-	{
+	else {
 		format(str, sizeof str, gZombieClass[pInfo[playerid][pClass]][E_CLASS_NAME]);
 	}
 
 	return str;
 }
+
+custom CheckPlayerKillStreak(killerid) { // Added by Logic_
+	new
+		kills = pInfo[killerid][Killstreak];
+
+	if ((!(kills % 5))) {
+		new
+			tokens = (kills / 5),
+			xp = (kills * 2),
+			cash = (kills * 10),
+			string[144];
+
+		format(string, sizeof string, ""chat""COL_WHITE" %s{9999FF} has achieved a killstreak of %d"COL_WHITE"(+%d XP +%d$) (%d Tokens)", GetPlayerNameEx(killerid), kills, xp, cash, tokens);
+		SendClientMessageToAll(-1, string);
+
+		pInfo[killerid][pXP] += xp;
+		GivePlayerMoney(killerid, cash);
+		pInfo[killerid][pCash] += cash;
+		pInfo[killerid][pCoins] += tokens;
+	}
+	return 1;
+}
+
+/* ZOMBIELAND - LOGIC_ - SJUTEL - KITTEN - PRIVATE200 - AND OTHER CONTRIBUTERS */
