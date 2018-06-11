@@ -1,4 +1,4 @@
-# Changelog (Latest: VERSION 1 BUILD 2 R2 (patch 1))
+# Changelog (Latest: Version 1 Build 2 R2 (patch 1))
 
 ### VERSION 1 BUILD 1
 1. Improved the indentation of the script at a lot of places.
@@ -36,3 +36,4 @@
 18. Optimized VIP labels code.
 19. General function changes:
 - Removed the two admin message function and added a new one.
+20. Fixed a mistake in headshot system code!
