@@ -8,6 +8,10 @@
 */
 
 #include	<a_samp>
+
+#undef		MAX_PLAYERS
+#define		MAX_PLAYERS					50 // Please modify it according to the slots in your server!
+
 #include	<sscanf2>
 #include	<foreach>
 #include	<izcmd>
@@ -51,6 +55,7 @@
 #define		PASSWORD_SALT				"xxxtentacion" // anyways, you should use per-player salts
 
 #define		MAX_REASON_LEN				20 // Maximum ban reason length
+#define		MAX_MAP_NAME_LEN			40 // Maximum map name
 
 #define		TABLE_BANS					"`Bans`"
 #define		FIELD_BAN_ID				"ID"
@@ -297,8 +302,21 @@ new const gAdminRanks[][] =
 };
 
 new
+	// Server related timers
 	DB: gSQL,
-	Text: gXPTD;
+	Text: gXPTD,
+	gTime,
+	gMap_Timer,
+	gBalance_Timer,
+	gMaps[MAX_MAPS],
+	gMapID,
+	gPlayersCount,
+	gGateObject,
+
+	// Player timers
+	pASK_Timer[MAX_PLAYERS],
+	Text3D: pVIPLabel[MAX_PLAYER_NAME],
+	Text3D: pAdminLabel[MAX_PLAYER_NAME];
 
 // Unchanged variables are located below!
 //TEXTDRAWS(round ending)
@@ -308,26 +326,15 @@ new Text:Textdraw9;
 new Text:Textdraw10;
 new Text:Textdraw11;
 new Text:Textdraw12;
-
-new connect_timer[MAX_PLAYERS];
 // Variables
-new time;
-new mapvar;
-new balvar;
-new gMaps[MAX_MAPS], gMapID, gateobj;
-new playerOnline;
 new playersAliveCount;
 new DocShield;
-new Text3D:labeladminduty[MAX_PLAYERS];
-new Text3D:labelvipbronze[MAX_PLAYERS];
-new Text3D:labelvipsilver[MAX_PLAYERS];
-new Text3D:labelvipgold[MAX_PLAYERS];
 
 new c4Obj[MAX_PLAYERS];
 new smokegas[MAX_PLAYERS];
 
-new String[128], Float:SpecX[MAX_PLAYERS], Float:SpecY[MAX_PLAYERS], Float:SpecZ[MAX_PLAYERS], vWorld[MAX_PLAYERS], Inter[MAX_PLAYERS];
-new IsSpecing[MAX_PLAYERS], Name[MAX_PLAYER_NAME], IsBeingSpeced[MAX_PLAYERS],spectatorid[MAX_PLAYERS];
+new Float:SpecX[MAX_PLAYERS], Float:SpecY[MAX_PLAYERS], Float:SpecZ[MAX_PLAYERS], vWorld[MAX_PLAYERS], Inter[MAX_PLAYERS];
+new IsSpecing[MAX_PLAYERS], IsBeingSpeced[MAX_PLAYERS],spectatorid[MAX_PLAYERS];
 
 new Text:EventText;
 new Text:CurrentMap;
@@ -356,32 +363,41 @@ new Text:ServerIntroTwo[MAX_PLAYERS];
 
 enum mapinfo
 {
-	MapName[128],
-	FSMapName[128],
+	MapName[MAX_MAP_NAME_LEN],
+	FSMapName[MAX_MAP_NAME_LEN],
+	
 	Float:HumanSpawnX,
 	Float:HumanSpawnY,
 	Float:HumanSpawnZ,
+	
 	Float:HumanSpawn2X,
 	Float:HumanSpawn2Y,
 	Float:HumanSpawn2Z,
+	
 	Float:ZombieSpawnX,
 	Float:ZombieSpawnY,
 	Float:ZombieSpawnZ,
+	
 	Float:GateX,
 	Float:GateY,
 	Float:GateZ,
+	
 	Float:GaterX,
 	Float:GaterY,
 	Float:GaterZ,
+	
 	Float:CPx,
 	Float:CPy,
 	Float:CPz,
+	
 	GateID,
 	MoveGate,
 	AllowWater,
+	
 	Interior,
 	Weather,
 	Time,
+	
 	EvacType,
 	IsStarted,
 	XPType
@@ -557,15 +573,15 @@ function StartMap()
 		TogglePlayerControllable(i,1);
 	}
 
-	time = MAX_MAPTIME;
+	gTime = MAX_MAPTIME;
 
 	SetWeather(Map[Weather]);
 	SetWorldTime(Map[Time]);
 	UpdateMapName();
 
-	gateobj = CreateObject(Map[GateID],Map[GateX],Map[GateY],Map[GateZ],Map[GaterX],Map[GaterY],Map[GaterZ],500.0);
-	mapvar = SetTimer("OnMapUpdate",MAX_MAPUPDATE_TIME,true);
-	balvar = SetTimer("OnMapBalance",MAX_BALANCERUPDATE_TIME,true);
+	gGateObject = CreateObject(Map[GateID],Map[GateX],Map[GateY],Map[GateZ],Map[GaterX],Map[GaterY],Map[GaterZ],500.0);
+	gMap_Timer = SetTimer("OnMapUpdate",MAX_MAPUPDATE_TIME,true);
+	gBalance_Timer = SetTimer("OnMapBalance",MAX_BALANCERUPDATE_TIME,true);
 	return 1;
 }
 
@@ -695,7 +711,7 @@ function EndMap(playerid)
 
 function OnMapUpdate()
 {
-	time -= 1;
+	gTime-= 1;
 
 	foreach(new i : Player)
 	{
@@ -707,12 +723,12 @@ function OnMapUpdate()
 		TextDrawHideForPlayer(i, Textdraw12);
 	}
 
-	TextDrawSetString(TimeLeft,timelefttimer(time));
+	TextDrawSetString(TimeLeft, timelefttimer(gTime));
 
-	if (time <= 0)
+	if (gTime<= 0)
 	{
-		KillTimer(mapvar);
-		KillTimer(balvar);
+		KillTimer(gMap_Timer);
+		KillTimer(gBalance_Timer);
 		SetTimer("ShowCheckpoint",MAX_SHOW_CP_TIME,false);
 		GameTextForAll("~b~Humans~n~ ~w~Go To Evacuation!",5000,4);
 	}
@@ -728,7 +744,7 @@ timelefttimer(seconds)
 
 function ShowCheckpoint()
 {
-	MoveObject(gateobj,Map[GateX],Map[GateY],Map[MoveGate],3.0);
+	MoveObject(gGateObject,Map[GateX],Map[GateY],Map[MoveGate],3.0);
 	foreach(new i : Player) SetPlayerCheckpoint(i,Map[CPx],Map[CPy],Map[CPz],6.0);
 	SetTimer("EndMap",MAX_END_TIME,false);
 	return 1;
@@ -736,14 +752,14 @@ function ShowCheckpoint()
 
 function OnMapBalance()
 {
-	if (playerOnline >= 2)
+	if (gPlayersCount >= 2)
 	{
 		EvenTeam();
 
 		if (GetTeamPlayersAlive(TEAM_HUMAN) == 0)
 		{
-			KillTimer(balvar);
-			KillTimer(mapvar);
+			KillTimer(gBalance_Timer);
+			KillTimer(gMap_Timer);
 			GameTextForAll("~r~*Zombies wins*",5000,4);
 			SetTimer("EndMap",4000,false);
 			foreach(new i : Player)
@@ -1113,7 +1129,7 @@ public OnPlayerConnect(playerid)
 	TextDrawHideForPlayer(playerid, Textdraw11);
 	TextDrawHideForPlayer(playerid, Textdraw12);
 
-	playerOnline++;
+	gPlayersCount++;
 	ResetVars(playerid);
 	ConnectVars(playerid);
 
@@ -1204,13 +1220,14 @@ public OnPlayerDisconnect(playerid, reason)
 
 	if (pInfo[playerid][pLogged] == 1) { SavePlayerAccount(playerid); } else return 0;
 	ResetVars(playerid);
+	
 	playersAliveCount--;
-	playerOnline--;
-	Delete3DTextLabel(labeladminduty[playerid]);
-	Delete3DTextLabel(labelvipbronze[playerid]);
-	Delete3DTextLabel(labelvipsilver[playerid]);
-	Delete3DTextLabel(labelvipgold[playerid]);
-	if (playerOnline == 0) return SendRconCommand("mapname Loading"),KillTimer(mapvar),KillTimer(balvar),Map[IsStarted] = 0;
+	gPlayersCount --;
+	
+	Delete3DTextLabel(pAdminLabel[playerid]);
+	Delete3DTextLabel(pVIPLabel[playerid]);
+
+	if (gPlayersCount == 0) return SendRconCommand("mapname Loading"),KillTimer(gMap_Timer),KillTimer(gBalance_Timer),Map[IsStarted] = 0;
 
 	if (IsBeingSpeced[playerid] == 1)
 	{
@@ -1244,8 +1261,8 @@ public OnPlayerSpawn(playerid)
 	UpdateRanksTextdraw(playerid);
 	ShowPlayerDialog(playerid, DIALOG_WEAPONS_SHOP, DIALOG_STYLE_LIST, "{FFFFFF}SHOP", "Weapons\nSkins\nClasses\nToken Shop\nPerks", "Select", "Close");
 
-	if (IsSpecing[playerid] == 1)
-	{
+	if (IsSpecing[playerid] == 1) {
+
 		SetPlayerPos(playerid,SpecX[playerid],SpecY[playerid],SpecZ[playerid]);
 		SetPlayerInterior(playerid,Inter[playerid]);
 		SetPlayerVirtualWorld(playerid,vWorld[playerid]);
@@ -1254,20 +1271,11 @@ public OnPlayerSpawn(playerid)
 		SetWeather(Map[Weather]);
 		SetWorldTime(Map[Time]);
 
-		if (pInfo[playerid][pVipLevel] >=1)
-		{
-			labelvipbronze[playerid] = Create3DTextLabel("Bronze VIP", 0xCC9900FF, 30.0, 40.0, 50.0, 40.0, 0);
-			Attach3DTextLabelToPlayer(labelvipbronze[playerid], playerid, 0.0, 0.0, 0.7);
-		}
-		if (pInfo[playerid][pVipLevel] >=2)
-		{
-			labelvipsilver[playerid] = Create3DTextLabel("Silver VIP", 0x999966FF, 30.0, 40.0, 50.0, 40.0, 0);
-			Attach3DTextLabelToPlayer(labelvipsilver[playerid], playerid, 0.0, 0.0, 0.7);
-		}
-		if (pInfo[playerid][pVipLevel] >=3)
-		{
-			labelvipgold[playerid] = Create3DTextLabel("Gold VIP", 0xFFCC00FF, 30.0, 40.0, 50.0, 40.0, 0);
-			Attach3DTextLabelToPlayer(labelvipgold[playerid], playerid, 0.0, 0.0, 0.7);
+		switch (pInfo[playerid][pVipLevel]) {
+			case 1: pVIPLabel[playerid] = Create3DTextLabel("Bronze VIP", 0xCC9900FF, 30.0, 40.0, 50.0, 40.0, 0);
+			case 2: pVIPLabel[playerid] = Create3DTextLabel("Bronze VIP", 0x999966FF, 30.0, 40.0, 50.0, 40.0, 0);
+			case 3: pVIPLabel[playerid] = Create3DTextLabel("Gold VIP", 0xFFCC00FF, 30.0, 40.0, 50.0, 40.0, 0);
+			default: pVIPLabel[playerid] = Create3DTextLabel("Regular Player", 0xFFFFFFFF, 30.0, 40.0, 50.0, 40.0, 0);
 		}
 
 		if (pInfo[playerid][pTeam] == TEAM_HUMAN)
@@ -1280,15 +1288,15 @@ public OnPlayerSpawn(playerid)
 			ZombieSetup(playerid);
 			SpawnPlayer(playerid);
 		}
-		}
-		else
-		{
+	}
+	else {
+
 		playersAliveCount++;
 		CheckToStartMap();
 		SetPlayerInterior(playerid,Map[Interior]);
 
 		SetPlayerHealth(playerid, 99999);
-		connect_timer[playerid] = SetTimerEx("EndAntiSpawnKill", 5000, false, "i", playerid);
+		pASK_Timer[playerid] = SetTimerEx("EndAntiSpawnKill", 5000, false, "i", playerid);
 
 		if (pInfo[playerid][pTeam] == TEAM_ZOMBIE)
 		{
@@ -1317,6 +1325,7 @@ public OnPlayerSpawn(playerid)
 		SpawnVars(playerid);
 		StopAudioStreamForPlayer(playerid);
 	}
+	
 	TextDrawHideForPlayer(playerid, Textdraw7);
 	TextDrawHideForPlayer(playerid, Textdraw8);
 	TextDrawHideForPlayer(playerid, Textdraw9);
@@ -1332,7 +1341,7 @@ public EndAntiSpawnKill(playerid)
 
 	pInfo[playerid][pSpawned] = 0;
 	SetPlayerHealth(playerid, 100.0);
-	KillTimer(connect_timer[playerid]);
+	KillTimer(pASK_Timer[playerid]);
 	SendClientMessage(playerid, 0xFFFFF55, "{ffffff}[{33FF99}ANTI-SK{ffffff}]: Spawn Protection Is Over.");
 	return 1;
 }
@@ -2137,11 +2146,11 @@ public OnPlayerTakeDamage(playerid, issuerid, Float: amount, weaponid, bodypart)
 					GameTextForPlayer(playerid, "~n~~r~HEADSHOT", 3000, 3);
 					GameTextForPlayer(issuerid, "~n~~g~HEADSHOT", 3000, 3);
 					
-					new Float:x, Float:y, Float:z, Float:fDistance, hsMessage[90], KName[MAX_PLAYER_NAME], PName[MAX_PLAYER_NAME];
+					new Float:x, Float:y, Float:z, Float:fDistance, hsMessage[90];
 					GetPlayerPos(playerid, x, y, z);
 					fDistance = GetPlayerDistanceFromPoint(issuerid, x, y, z);
 
-					format(hsMessage, sizeof(hsMessage), "{DC143C}%s has Headshotted {FFFFFF}%s{DC143C} from the distance of %0.2f", KName, PName, fDistance);
+					format(hsMessage, sizeof(hsMessage), "{DC143C}%s has Headshotted {FFFFFF}%s{DC143C} from the distance of %0.2f", GetPlayerNameEx(issuerid), GetPlayerNameEx(playerid), fDistance);
 					SendClientMessageToAll(-1, hsMessage);
 					pInfo[issuerid][pHeads]++;
 				}
@@ -2198,8 +2207,8 @@ public OnPlayerKeyStateChange(playerid, newkeys, oldkeys)
 {
 	if (newkeys == KEY_NO && pInfo[playerid][pTeam] == TEAM_ZOMBIE && pInfo[playerid][pSpawned])
 	{
-		KillTimer(connect_timer[playerid]);
-		connect_timer[playerid] = SetTimerEx("EndAntiSpawnKill", 1, false, "i", playerid);
+		KillTimer(pASK_Timer[playerid]);
+		pASK_Timer[playerid] = SetTimerEx("EndAntiSpawnKill", 1, false, "i", playerid);
 		SendClientMessage(playerid, 0xFFFFF55, "{ffffff}[{33FF99}ANTI-SK{ffffff}]: You Have Ended Your Spawn Protection.");
 	}
 
@@ -2835,13 +2844,13 @@ public AntiCheat()
 		if ((x <= -0.800000  || y <= -0.800000 || z <= -0.800000) && GetPlayerAnimationIndex(i) == 1008)
 		{
 			format(str, sizeof str, "[AC] Fly hack detected on %s (%d).", GetPlayerNameEx(i), i);
-			SendMessageToAdmins(COLOR_RED, str);
+			SendMessageToAdmins(str, COLOR_RED);
 		}
 
 		if (GetPlayerSpeedSpeedo(i, true) > 400)
 		{
 			format(str, sizeof str, "[AC] Speed hacks detected on %s (%d).", GetPlayerNameEx(i), i);
-			SendMessageToAdmins(COLOR_RED, str);
+			SendMessageToAdmins(str, COLOR_RED);
 		}
 
 		if (GetPlayerWeapon(i) == 38 && !pInfo[i][Minigun])
@@ -3282,7 +3291,7 @@ CMD:report(playerid, params[])
 			format(sendername, sizeof(sendername), "%s", GetPlayerNameEx(playerid));
 			format(giveplayer, sizeof(giveplayer), "%s", GetPlayerNameEx(lookupid));
 			format(string, sizeof string, "{ffffff}[{009999}REPORT{ffffff}]: %s[%d] has reported %s[%d] [Reason: %s]", sendername, playerid, giveplayer, lookupid, text);
-			SendMessageToAllAdmins(string, -1);
+			SendMessageToAdmins(string, -1);
 			printf("{ffffff}[{009999}REPORT{ffffff}]: %s[%d] has reported %s[%d] [Reason: %s]", sendername, playerid, giveplayer, lookupid, text);
 			SendClientMessage(playerid,-1,""chat" Thank you for reporting. We apologize for the disturbance.");
 		}
@@ -3848,8 +3857,8 @@ CMD:aod(playerid)
 			SetPlayerHealth(playerid,999999.0);
 			SetPVarInt(playerid, "aduty147", 1);
 			SetPlayerSkin(playerid, 217);
-			labeladminduty[playerid] = Create3DTextLabel("Admin On Duty!", 0x99FF33FF, 30.0, 40.0, 50.0, 40.0, 0);
-			Attach3DTextLabelToPlayer(labeladminduty[playerid], playerid, 0.0, 0.0, 0.7);
+			pAdminLabel[playerid] = Create3DTextLabel("Admin On Duty!", 0x99FF33FF, 30.0, 40.0, 50.0, 40.0, 0);
+			Attach3DTextLabelToPlayer(pAdminLabel[playerid], playerid, 0.0, 0.0, 0.7);
 			pInfo[playerid][pTeam] = TEAM_ZOMBIE;
 			SendClientMessage(playerid,COLOR_RED,"Remember to /aod when you play as regular player.");
 			}
@@ -3860,7 +3869,7 @@ CMD:aod(playerid)
 				aduty[playerid] = 0;
 				new adutyoffstring[128];
 				format(adutyoffstring, sizeof(adutyoffstring), "%s %s is now Admin Off Duty !" ,GetAdminRankName(playerid), GetPlayerNameEx(playerid));
-				Delete3DTextLabel(labeladminduty[playerid]);
+				Delete3DTextLabel(pAdminLabel[playerid]);
 				SetPVarInt(playerid, "aduty147", 0);
 				SendClientMessageToAll(-1,adutyoffstring);
 
@@ -3925,10 +3934,12 @@ CMD:spec(playerid,params[])
 				}
 				PlayerSpectatePlayer(playerid,id);
 			}
-			format(String, sizeof String,"{ffffff}You have started to spectate %s.",Name);
+
+			new String[40 + MAX_PLAYER_NAME];
+			format(String, sizeof String,"{ffffff}You have started to spectate %s.", GetPlayerNameEx(id));
 			SendClientMessage(playerid,0x0080C0FF,String);
-			IsSpecing[playerid] = 1;
-			IsBeingSpeced[id] = 1;
+
+			IsSpecing[playerid] = IsBeingSpeced[id] = 1;
 			spectatorid[playerid] = id;
 		}
 			else SendClientMessage(playerid,-1,""chat" You must be on admin duty before you spectate! /aod");
@@ -4198,7 +4209,7 @@ CMD:a(playerid,params[])
 			return 1;
 		}
 		format(adminstring, sizeof(adminstring), "{ffffff}[{00FF00}ADMIN CHAT{ffffff}]%s(%d): %s", GetPlayerNameEx(playerid), playerid, params);
-		SendMessageToAllAdmins(adminstring, -1);
+		SendMessageToAdmins(adminstring, -1);
 	}
 	else {
 		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
@@ -4227,7 +4238,7 @@ CMD:warn(playerid,params[])
 		{
 			format(string, sizeof string, "{DC143C}%s %s has kicked %s Reason: %s (3 Warnings EXCEEDED)",GetAdminRankName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid),reason);
 			SendClientMessageToAll(-1,string);
-			SetTimerEx("KickTimer", 1000, false, "i", lookupid);
+			KickPlayer(lookupid);
 		}
 	}
 	else {
@@ -4294,7 +4305,7 @@ CMD:mute(playerid,params[])
 		pInfo[lookupid][IsPlayerMuted] = 1;
 
 		format(string, sizeof string,"{DC143C}%s %s has muted %s [Reason: %s]",GetAdminRankName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid),reason);
-		SendMessageToAllAdmins(string,-1);
+		SendMessageToAdmins(string,-1);
 
 		format(string, sizeof string,"{DC143C}%s %s muted you for [Reason %s]",GetAdminRankName(playerid), GetPlayerNameEx(playerid),reason);
 		SendClientMessage(lookupid,-1,string);
@@ -4387,15 +4398,14 @@ CMD:kick(playerid,params[])
 
 		format(string, sizeof string, "You are kicked from the server!\n\n{DC143C}Kicked by{ffffff}: %s\n{DC143C}Reason{ffffff}: %s", GetPlayerNameEx(playerid), reason);
 		ShowPlayerDialog(lookupid,DIALOG_KICKN,DIALOG_STYLE_MSGBOX,"{DC143C}KICKED",string,"Close","");
-		SetTimerEx("KickTimer", 1000, false, "i", lookupid);
+		KickPlayer(lookupid);
 	}
 	else {
 		SendClientMessage(playerid,COLOR_RED,"{FF0000}You don't have permission to use this command!");
 	}
 	return 1;
 }
-///////////////////////////////////////////////////////////
-///////////==============LEVEL 2================///////////
+
 CMD:exit(playerid)
 {
 	if (pInfo[playerid][pLogged] == 1)
@@ -4452,7 +4462,7 @@ CMD:skip(playerid)
 {
 	if (pInfo[playerid][pAdminLevel] >= 2)
 	{
-		time = 5;
+		gTime = 5;
 	}
 	return 1;
 }
@@ -4579,7 +4589,7 @@ CMD:freezeteam(playerid, params[])
 		//-----------------------------------
 		if (strfind(params,"Zombie",true) != -1)
 		{
-			for(new i = 0; i < MAX_PLAYERS; i++)
+			foreach(new i : Player)
 			{
 				if (pInfo[i][pTeam] == TEAM_ZOMBIE)
 				{
@@ -4593,7 +4603,7 @@ CMD:freezeteam(playerid, params[])
 		//---------------------------------
 		if (strfind(params,"Human",true) != -1)
 		{
-			for(new i = 0; i < MAX_PLAYERS; i++)
+			foreach(new i : Player)
 			{
 				if (pInfo[i][pTeam] == TEAM_HUMAN)
 				{
@@ -4617,7 +4627,7 @@ CMD:unfreezeteam(playerid, params[])
 		//-----------------------------------
 		if (strfind(params,"Zombie",true) != -1)
 		{
-			for(new i = 0; i < MAX_PLAYERS; i++)
+			foreach(new i : Player)
 			{
 				if (pInfo[i][pTeam] == TEAM_ZOMBIE)
 				{
@@ -4631,7 +4641,7 @@ CMD:unfreezeteam(playerid, params[])
 		//---------------------------------
 		if (strfind(params,"Human",true) != -1)
 		{
-			for(new i = 0; i < MAX_PLAYERS; i++)
+			foreach(new i : Player)
 			{
 				if (pInfo[i][pTeam] == TEAM_HUMAN)
 				{
@@ -5043,15 +5053,6 @@ LoadAccount(playerid)
 	return 1;
 }
 
-custom SendMessageToAdmins(color, const string[], level = 1)
-{
-	foreach(new i : Player)
-	{
-		if (pInfo[i][pAdminLevel] >= level) SendClientMessage(i, color, string);
-	}
-	return 1;
-}
-
 custom ClearChat()
 {
 	for(new a = 0; a < 129; a++) SendClientMessageToAll(-1, " ");
@@ -5179,25 +5180,23 @@ GetXYInFrontOfPlayer(playerid, &Float:x, &Float:y, Float:distance)
 
 custom SetPlayerPosEx( playerid, Float: posx, Float: posy, Float: posz, interior, virtualworld )
 {
-	if ( GetPlayerState( playerid ) == 2 )
-	{
-	  SetPlayerVirtualWorld( playerid, virtualworld );
-	  SetVehicleVirtualWorld( GetPlayerVehicleID( playerid ), virtualworld );
-	  LinkVehicleToInterior( GetPlayerVehicleID( playerid ), interior );
-	  SetPlayerInterior( playerid, interior );
-	  SetVehiclePos( GetPlayerVehicleID( playerid ), posx, posy, posz );
-	  return 1;
+	if (GetPlayerState(playerid) == 2) {
+		SetPlayerVirtualWorld( playerid, virtualworld );
+		SetVehicleVirtualWorld( GetPlayerVehicleID( playerid ), virtualworld );
+		LinkVehicleToInterior( GetPlayerVehicleID( playerid ), interior );
+		SetPlayerInterior( playerid, interior );
+		SetVehiclePos( GetPlayerVehicleID( playerid ), posx, posy, posz );
+		return 1;
 	}
-	else
-	{
-	  SetPlayerVirtualWorld( playerid, virtualworld );
-	  SetPlayerInterior( playerid, interior );
-	  SetPlayerPos( playerid, posx, posy, posz );
-	  return 1;
+	else {
+		SetPlayerVirtualWorld( playerid, virtualworld );
+		SetPlayerInterior( playerid, interior );
+		SetPlayerPos( playerid, posx, posy, posz );
+		return 1;
 	}
 }
 
-custom SendMessageToAllAdmins(message[], color)
+custom SendMessageToAdmins(message[], color)
 {
 	foreach(new i : Player)
 	{
@@ -5436,18 +5435,18 @@ custom IsPlayerInWater(playerid)
 	return false;
 }
 
-GetTeamPlayersAlive(teamid)
-{
+GetTeamPlayersAlive(teamid) { // Modified by Logic_
+
 	new count;
 	for(new i; i < playersAliveCount; i++)
 	{
-		if (IsPlayerConnected(i) && pInfo[i][pTeam] == teamid) count++;
+		if (pInfo[i][pTeam] == teamid) count++;
 	}
 	return count;
 }
 
-custom EvenTeam()
-{
+custom EvenTeam() { // Modified by Logic_
+
 	new count = Iter_Count(Player), number = (count % 2);
 
 	count /= 2;
@@ -5681,64 +5680,64 @@ custom DefaultTextdraws()
 
 custom UpdateAliveInfo()
 {
-	new string[128];
-	format(string, sizeof string,"~r~%d~w~ ZOMBIES ~w~VS~w~ HUMANS ~b~%d",GetTeamPlayersAlive(TEAM_ZOMBIE),GetTeamPlayersAlive(TEAM_HUMAN));
+	new string[50];
+	format(string, sizeof string, "~r~%d~w~ ZOMBIES ~w~VS~w~ HUMANS ~b~%d", GetTeamPlayersAlive(TEAM_ZOMBIE), GetTeamPlayersAlive(TEAM_HUMAN));
 	
 	return TextDrawSetString(AliveInfo,string), 1;
 }
 
-custom UpdateXPTextdraw(playerid)
-{
-	new string[50];
-	format(string, sizeof string,"XP: %i",pInfo[playerid][pXP]);
+custom UpdateXPTextdraw(playerid) { // Modified by Logic_
+	
+	new string[24];
+	format(string, sizeof string, "XP: %i",pInfo[playerid][pXP]);
 	TextDrawSetString(myXP[playerid],string);
 	return 1;
 }
 
-custom UpdateKillsTextdraw(playerid)
-{
-	new string[50];
-	format(string, sizeof string,"Kills: %i",pInfo[playerid][pKills]);
+custom UpdateKillsTextdraw(playerid) { // Modified by Logic_
+
+	new string[24];
+	format(string, sizeof string, "Kills: %i",pInfo[playerid][pKills]);
 	TextDrawSetString(mykills[playerid],string);
 	return 1;
 }
 
-custom UpdateDeathsTextdraw(playerid)
-{
-	new string[50];
-	format(string, sizeof string,"Deaths: %i",pInfo[playerid][pDeaths]);
+custom UpdateDeathsTextdraw(playerid) { // Modified by Logic_
+
+	new string[24];
+	format(string, sizeof string, "Deaths: %i", pInfo[playerid][pDeaths]);
 	TextDrawSetString(mydeaths[playerid],string);
 	return 1;
 }
 
-custom UpdateKDTextdraw(playerid)
-{
-	new string[50],Float:kd = floatdiv(pInfo[playerid][pKills], pInfo[playerid][pDeaths]);
-	format(string, sizeof string,"K/D: %0.2f",kd);
+custom UpdateKDTextdraw(playerid) { // Modified by Logic_
+
+	new string[24], Float:kd = floatdiv(pInfo[playerid][pKills], pInfo[playerid][pDeaths]);
+	format(string, sizeof string, "K/D: %0.2f", kd);
 	TextDrawSetString(mykd[playerid],string);
 	return 1;
 }
 
-custom UpdateTokensTextdraw(playerid)
-{
-	new string[50];
-	format(string, sizeof string,"Tokens: %i",pInfo[playerid][pCoins]);
+custom UpdateTokensTextdraw(playerid) { // Modified by Logic_
+
+	new string[24];
+	format(string, sizeof string, "Tokens: %i",pInfo[playerid][pCoins]);
 	TextDrawSetString(mytokens[playerid],string);
 	return 1;
 }
 
-custom UpdateRanksTextdraw(playerid)
-{
-	new string[50];
-	format(string, sizeof string,"Rank: %i",pInfo[playerid][pRank]);
-	TextDrawSetString(myrank[playerid],string);
+custom UpdateRanksTextdraw(playerid) { // Modified by Logic_
+
+	new string[20];
+	format(string, sizeof string, "Rank: %i/%i", pInfo[playerid][pRank], sizeof gRanks);
+	TextDrawSetString(myrank[playerid], string);
 	return 1;
 }
 
-custom UpdateMapName()
-{
-	new string[100];
-	format(string, sizeof string,"Map: ~w~%s", Map[MapName]);
+custom UpdateMapName() { // Modified by Logic_
+
+	new string[10 + MAX_MAP_NAME_LEN];
+	format(string, sizeof string, "Map: ~w~%s", Map[MapName]);
 	TextDrawSetString(CurrentMap,string);
 	return 1;
 }
@@ -6079,9 +6078,9 @@ custom IsValidWeapon( weaponid )
 	return 0;
 }
 
-custom GetXPName()
+custom GetXPName() // Modified by Logic_
 {
-	new str[64];
+	new str[11];
 	switch (Map[XPType])
 	{
 		case 1: str = "Normal XP";
@@ -6199,14 +6198,15 @@ custom hideTextdrawsAfterConnect(playerid)
 
 function SPS_Reset_PVars()
 {
-	for(new i; i < MAX_PLAYERS; i++)
-	{
+	for(new i; i < MAX_PLAYERS; i++) {
 		if (GetPVarType(i, "SPS Muted") != PLAYER_VARTYPE_NONE) {
 			SetPVarInt(i, "SPS Muted", 0);
 		}
+		
 		if (GetPVarType(i, "SPS Messages Sent") != PLAYER_VARTYPE_NONE) {
 			SetPVarInt(i, "SPS Messages Sent", 0);
 		}
+		
 		if (GetPVarType(i, "SPS Spam Warnings") != PLAYER_VARTYPE_NONE) {
 			SetPVarInt(i, "SPS Spam Warnings", 0);
 		}
@@ -6214,14 +6214,16 @@ function SPS_Reset_PVars()
 	return 1;
 }
 
-function SPS_Remove_Messages_Limit(playerid)
-{
-	if (GetPVarInt(playerid, "SPS Spam Warnings") == 1)
-	{
+function SPS_Remove_Messages_Limit(playerid) { // Modified by Logic_
+
+	if (GetPVarInt(playerid, "SPS Spam Warnings") == 1) {
 		new string[128];
 
 		format(string, sizeof string, "{DC143C}Player %s has been muted for %i minutes because of flooding the chat.", GetPlayerNameEx(playerid), PLAYER_MUTE_TIME_MINUTES);
-		for(new i=0; i < MAX_PLAYERS; i++) if (IsPlayerConnected(i) && i != playerid) SendClientMessage(i, -1, string);
+		foreach(new i : Player) {
+			if (i != playerid)
+				SendClientMessage(i, -1, string);
+		}
 
 		format(string, sizeof string, "{CCFFFF}You have been muted for %i minutes because of flooding the chat.", PLAYER_MUTE_TIME_MINUTES);
 		SendClientMessage(playerid, -1, string);
@@ -6231,6 +6233,7 @@ function SPS_Remove_Messages_Limit(playerid)
 
 		CallRemoteFunction("OnPlayerGetMuted", "i", playerid);
 	}
+	
 	SetPVarInt(playerid, "SPS Messages Sent", 0);
 	SetPVarInt(playerid, "SPS Spam Warnings", 0);
 	return 1;
