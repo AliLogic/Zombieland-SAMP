@@ -1,4 +1,4 @@
-# Changelog
+# Changelog (Latest: VERSION 1 BUILD 2 R2 (patch 1))
 
 ### VERSION 1 BUILD 1
 1. Improved the indentation of the script at a lot of places.
