@@ -8,7 +8,8 @@
 6. Updated several commands by optimizing or re-writing them.
 7. The code looks a lot more cleaner.
 8. Removed the play time saving method which used three different variables.
-9. General function changes:
+9. Optimized the script at lots of places
+10. General function changes:
 - GetAdminName renamed to GetAdminRank and updated it.
 - Improved the GetClosestPlayer function.
 - Re-written OnPlayerDeath.
