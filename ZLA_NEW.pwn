@@ -459,7 +459,7 @@ enum aname
 }
 new Abilitys[MAX_PLAYERS][aname];
 
-new randomMessages[][] =
+new const gRandomMessages[][144] =
 {
 	"[{DC143C}SERVER{FFFFFF}]: Check the command /vip, to see information about the donation and features.",
 	"[{DC143C}SERVER{FFFFFF}]: Join our Community Forums: www.samp-zombieland.info, to see the latest News & Updates.",
@@ -468,8 +468,8 @@ new randomMessages[][] =
 	"[{DC143C}SERVER{FFFFFF}]: If you have seen the Hacker, then please use /report [id] [reason], do not shout about it in the main public chat.",
 	"[{DC143C}SERVER{FFFFFF}]: Please respect other Players & Administrators on this server.",
 	"[{DC143C}SERVER{FFFFFF}]: Remember to read and follow the server /rules, do NOT, violate any of them.",
-	"[{DC143C}SERVER{FFFFFF}]: Interested to become the server Administrator or Mapper? You can post your Application at our Community Forums: www.samp-zombieland.info",
-	"[{DC143C}SERVER{FFFFFF}]: Do you enjoy playing? Then don't forget to add this server to your favorites! Also invite your friends.  "
+	"[{DC143C}SERVER{FFFFFF}]: Interested to become part of our staff team? You can post your application at our forums!",
+	"[{DC143C}SERVER{FFFFFF}]: Do you enjoy playing? Then don't forget to add this server to your favorites! Also invite your friends."
 };
 
 enum E_RANKS
@@ -1088,7 +1088,7 @@ public OnPlayerRequestSpawn(playerid)
 	if (pInfo[playerid][pLogged]) return 1;
 	
 	GameTextForPlayer(playerid, "~r~YOU MUST LOGIN TO PLAY", 1000, 4);
-	CheckAccount(playerid);
+	CheckPlayerAccount(playerid);
 	return 0;
 }
 
@@ -1129,7 +1129,7 @@ public OnPlayerConnect(playerid)
 		KickPlayer(playerid);
 		return 0;
 	}
-	CheckAccount(playerid);
+	CheckPlayerAccount(playerid);
 
 	TextDrawHideForPlayer(playerid, Textdraw7);
 	TextDrawHideForPlayer(playerid, Textdraw8);
@@ -1140,7 +1140,7 @@ public OnPlayerConnect(playerid)
 	return 1;
 }
 
-CheckAccount(playerid)
+CheckPlayerAccount(playerid)
 {
 	new query[128], DBResult: result;
 	format(query, sizeof query, "SELECT "FIELD_PASSWORD", "FIELD_ID" FROM "TABLE_USERS" WHERE "FIELD_NAME" = '%q'", GetPlayerNameEx(playerid));
@@ -1180,7 +1180,7 @@ public OnPlayerWeaponShot( playerid, weaponid, hittype, hitid, Float:fX, Float:f
 	return 1;
 }
 
-SaveAccount(playerid)
+SavePlayerAccount(playerid)
 {
 	new query[200];
 	format(query, sizeof query,
@@ -1202,7 +1202,7 @@ public OnPlayerDisconnect(playerid, reason)
 	}
 	SendClientMessageToAll(0xAAAAAAAA, string);
 
-	if (pInfo[playerid][pLogged] == 1) { SaveAccount(playerid); } else return 0;
+	if (pInfo[playerid][pLogged] == 1) { SavePlayerAccount(playerid); } else return 0;
 	ResetVars(playerid);
 	playersAliveCount--;
 	playerOnline--;
@@ -3349,7 +3349,7 @@ CMD:savestats(playerid)
 {
 	if (pInfo[playerid][pLogged] == 1)
 	{
-		SaveAccount(playerid);
+		SavePlayerAccount(playerid);
 		SendClientMessage(playerid,-1,""chat"{33FF99} Your game statistics have been saved.");
 	}
 	return 1;
@@ -5017,8 +5017,7 @@ CMD:dj(playerid, params[])
 
 function RandomMessages()
 {
-	new randomMsg = random(sizeof(randomMessages));
-	SendClientMessageToAll(-1, randomMessages[randomMsg]);
+	return SendClientMessageToAll(-1, gRandomMessages[random(sizeof gRandomMessages)]);
 }
 
 LoadAccount(playerid)
