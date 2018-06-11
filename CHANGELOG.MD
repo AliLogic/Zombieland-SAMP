@@ -26,5 +26,6 @@
 - Added GetPlayerNameEx, which fetches the player name once upon connection and stores it in the array.
 - Revised the OnPlayerConnect function and improvised the vending machine removal code.
 - Revised the random message code a little bit.
+- Added KickPlayer
 14. Optimized the script at lots of other places.
 15. More indentation fixes.
