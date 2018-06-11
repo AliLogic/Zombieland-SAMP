@@ -5117,7 +5117,6 @@ custom BanPlayer(playerid, reason[], adminid) {
 	new
 		string[500],
 		query[56 + MAX_PLAYER_NAME + MAX_REASON_LEN],
-		Player_Name[MAX_PLAYER_NAME],
 		Admin_Name[MAX_PLAYER_NAME] = "Anti Cheat";
 
 	TogglePlayerControllable(playerid, false);
@@ -5125,13 +5124,13 @@ custom BanPlayer(playerid, reason[], adminid) {
 	if (adminid != INVALID_PLAYER_ID) {
 		Admin_Name[0] = GetPlayerNameEx(adminid);
 
-		format(string, sizeof string, "[{00FF80}ADMIN{FFFFFF}]: {00FF80}%s (ID:%d) has been banned from the server {FFFFFF}[{00FF80}%s{FFFFFF}]", Player_Name, playerid, reason);
+		format(string, sizeof string, "[{00FF80}ADMIN{FFFFFF}]: {00FF80}%s (ID:%d) has been banned from the server {FFFFFF}[{00FF80}%s{FFFFFF}]", GetPlayerNameEx(playerid), playerid, reason);
 	}
 	else {
-		format(string, sizeof string, "[{00FF80}ANTI-CHEAT{FFFFFF}]: {00FF80}%s (ID:%d) has been banned from the server {FFFFFF}[{00FF80}%s{FFFFFF}]", Player_Name, playerid, reason);
+		format(string, sizeof string, "[{00FF80}ANTI-CHEAT{FFFFFF}]: {00FF80}%s (ID:%d) has been banned from the server {FFFFFF}[{00FF80}%s{FFFFFF}]", GetPlayerNameEx(playerid), playerid, reason);
 	}
 
-	format(query, sizeof query, "INSERT INTO "#TABLE_BANS" (`Name`, `Reason`) VALUES('%q', '%q')", Player_Name, reason);
+	format(query, sizeof query, "INSERT INTO "#TABLE_BANS" (`Name`, `Reason`) VALUES('%q', '%q')", GetPlayerNameEx(playerid), reason);
 	db_free_result(db_query(gSQL, query));
 
 	SendClientMessageToAll(-1, string);
