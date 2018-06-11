@@ -1,6 +1,6 @@
 # Changelog
 
-## VERSION 1 BUILD 1
+### VERSION 1 BUILD 1
 1. Improved the indentation of the script at a lot of places.
 2. Improved the ranking system and changed it to utilize array.
 3. Improved the class system and changed them to utilize arrays as well. Both, Human and Zombie teams use different arrays.
@@ -16,7 +16,7 @@
 - Improved the GetClosestPlayer function.
 - Re-written OnPlayerDeath.
 
-## VERSION 1 BUILD 2
+### VERSION 1 BUILD 2
 12. Added a new ban system (fairly basic and only bans username for now)
 13. General function changes:
 - Renamed CheckAccount to CheckPlayerAccount.
@@ -26,6 +26,13 @@
 - Added GetPlayerNameEx, which fetches the player name once upon connection and stores it in the array.
 - Revised the OnPlayerConnect function and improvised the vending machine removal code.
 - Revised the random message code a little bit.
-- Added KickPlayer
+- Added KickPlayer.
 14. Optimized the script at lots of other places.
 15. More indentation fixes.
+
+#### VERSION 1 BUILD 2 R2 (patch 1)
+16. More code clean up.
+17. Renamed some variables.
+18. Optimized VIP labels code.
+19. General function changes:
+- Removed the two admin message function and added a new one.
