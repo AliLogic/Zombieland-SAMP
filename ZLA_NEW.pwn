@@ -2,7 +2,7 @@
 	Script licensed to Logic_
 	Copyright 2017-2018
 	Licensed under The Digital Millennium Copyright Act of 1998 (https://www.copyright.gov/legislation/dmca.pdf)
-	Version 1 Buil
+	Version 1 Build 2
 
 	Formerly known as Zombieland (samp-zombieland.info)
 */
