@@ -1,4 +1,4 @@
-# Changelog (Latest: Version 1 Build 2 (patch 1))
+# Changelog (Latest: Version 1 Build 3)
 
 ### VERSION 1 BUILD 1
 1. Improved the indentation of the script at a lot of places.
@@ -42,3 +42,7 @@
 21. Command changes:
 - Removed /unblockpm and /blockpm and added /dnd.
 - Updated /maps.
+
+### VERSION 1 BUILD 3
+22. Heavily optimised and organised OnPlayerKeyStateChange function.
+23. Modified GivePlayerXP function
