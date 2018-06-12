@@ -3433,53 +3433,50 @@ CMD:pstats(playerid,params[])
 	return 1;
 }
 
-CMD:blockpm(playerid) return pInfo[playerid][pPM] = 1, SendClientMessage(playerid,-1,""chat" You are now blocking private messages.");
-CMD:unblockpm(playerid) return pInfo[playerid][pPM] = 0, SendClientMessage(playerid,-1,""chat" You are not blocking anymore private messages.");
+CMD:dnd(playerid) {
 
-CMD:maps(playerid)
-{
-	new mapstring[2000];
-	strcat(mapstring,"Here will be listed the all Maps of the server, which were\n");
-	strcat(mapstring,"created by our server Mappers and other people with their credit.\n");
-	strcat(mapstring,"\n");
-	strcat(mapstring,"\n");
-	strcat(mapstring,"{ffffff}MAP#0: {FFB266}LVPD/Las Venturas Police Department <Interior Map>\n");
-	strcat(mapstring,"{ffffff}MAP#1: {FFB266}Jefferson Motel <Interior Map>\n");
-	strcat(mapstring,"{ffffff}MAP#2: {FFB266}Meat Factory <Interior Map>\n");
-	strcat(mapstring,"{ffffff}MAP#3: {FFB266}Sherman Dam <Interior Map>\n");
-	strcat(mapstring,"{ffffff}MAP#4: {FFB266}BattleField <Interior Map>\n");
-	strcat(mapstring,"{ffffff}MAP#5: {FFB266}TheAfterWar (Made by Justice (SjuteL))\n");
-	strcat(mapstring,"{ffffff}MAP#6: {FFB266}Pharoahs Rise (Made by Shady)\n");
-	strcat(mapstring,"{ffffff}MAP#7: {FFB266}Resident Evil (Made by Shady)\n");
-	strcat(mapstring,"{ffffff}MAP#8: {FFB266}Dead Farm (Made by hossa)\n");
-	strcat(mapstring,"{ffffff}MAP#9: {FFB266}Dead Sewers (Made by hossa)\n");
-	strcat(mapstring,"{ffffff}MAP#10: {FFB266}Hallows Forest (Made by Justice (SjuteL))\n");
-	strcat(mapstring,"{ffffff}MAP#11: {FFB266}Land Of Terror (Made by Shady)\n");
-	strcat(mapstring,"{ffffff}MAP#12: {FFB266}Vinewood Cemetery (Made by Justice (SjuteL))\n");
-	strcat(mapstring,"{ffffff}MAP#13: {FFB266}Abandoned Sea (Made by Ceedie)\n");
-	strcat(mapstring,"{ffffff}MAP#14: {FFB266}Prepped Square (Made by Ceedie)\n");
-	strcat(mapstring,"{ffffff}MAP#15: {FFB266}Rock Hotel (Made by Ceedie)\n");
-	strcat(mapstring,"{ffffff}MAP#16: {FFB266}Airport Construction (Made by Ceedie)\n");
-	strcat(mapstring,"{ffffff}MAP#17: {FFB266}KACC Military (Made by Ceedie).\n");
-	strcat(mapstring,"{ffffff}MAP#18: {FFB266}Ocean DocksCrane (Made by Ceedie).\n");
-	strcat(mapstring,"{ffffff}MAP#19: {FFB266}SantaMaria Beach (Made by Ceedie).\n");
-	strcat(mapstring,"{ffffff}MAP#20: {FFB266}Toy Story (Made by Ceedie).\n");
-	strcat(mapstring,"{ffffff}MAP#21: {FFB266}Market Tunnel (Made by Justice (SjuteL)).\n");
-	strcat(mapstring,"{ffffff}MAP#22: {FFB266}Liberty City (Made by Pride).\n");
-	strcat(mapstring,"{ffffff}MAP#23: {FFB266}GroveSt Christmas (Made by LosTigeros/Patryk98).\n");
-	strcat(mapstring,"{ffffff}MAP#24: {FFB266}Skyscraper (Made by Justice (SjuteL)).\n");
-	strcat(mapstring,"{ffffff}MAP#25: {FFB266}Outpost (Unknown Creator).\n");
-	strcat(mapstring,"{ffffff}MAP#26: {FFB266}Swamp (Made by Moody).\n");
-	strcat(mapstring,"\n");
-	strcat(mapstring,"\n");
-	strcat(mapstring,"{ffffff}More maps will be added in the future. Our Mappers will try their best,\n");
-	strcat(mapstring,"to make cool and enjoyable maps for you to play on.\n");
-	strcat(mapstring,"\n");
-	strcat(mapstring,"If you are interested to become a Mapper on our server, post application in our Forum:\n");
-	strcat(mapstring,"\n");
-	strcat(mapstring,"{FFFF33}www.samp-zombieland.info\n");
-	ShowPlayerDialog(playerid,DIALOG_MAPS,DIALOG_STYLE_MSGBOX,"{DC143C}Server Maps",mapstring,"Close","");
+	SendClientMessage(playerid, -1, (pInfo[playerid][pPM] ^= 1, pInfo[playerid][pPM]) ? ""chat" You are now blocking private messages." : ""chat" You are not blocking anymore private messages.");
 	return 1;
+}
+
+CMD:maps(playerid) {
+	
+	new string[2000];
+
+	strcat(string, "All of the server maps are listed here:\nThis includes all the creations of our mappers and other people along with their credits.\n\n\n");
+
+	strcat(string, "{ffffff}MAP#00: {FFB266}LVPD/Las Venturas Police Department <Interior Map>\n");
+	strcat(string, "{ffffff}MAP#01: {FFB266}Jefferson Motel <Interior Map>\n");
+	strcat(string, "{ffffff}MAP#02: {FFB266}Meat Factory <Interior Map>\n");
+	strcat(string, "{ffffff}MAP#03: {FFB266}Sherman Dam <Interior Map>\n");
+	strcat(string, "{ffffff}MAP#04: {FFB266}BattleField <Interior Map>\n");
+	strcat(string, "{ffffff}MAP#05: {FFB266}TheAfterWar (Made by Justice (SjuteL))\n");
+	strcat(string, "{ffffff}MAP#06: {FFB266}Pharoahs Rise (Made by Shady)\n");
+	strcat(string, "{ffffff}MAP#07: {FFB266}Resident Evil (Made by Shady)\n");
+	strcat(string, "{ffffff}MAP#08: {FFB266}Dead Farm (Made by hossa)\n");
+	strcat(string, "{ffffff}MAP#09: {FFB266}Dead Sewers (Made by hossa)\n");
+	strcat(string, "{ffffff}MAP#10: {FFB266}Hallows Forest (Made by Justice (SjuteL))\n");
+	strcat(string, "{ffffff}MAP#11: {FFB266}Land Of Terror (Made by Shady)\n");
+	strcat(string, "{ffffff}MAP#12: {FFB266}Vinewood Cemetery (Made by Justice (SjuteL))\n");
+	strcat(string, "{ffffff}MAP#13: {FFB266}Abandoned Sea (Made by Ceedie)\n");
+	strcat(string, "{ffffff}MAP#14: {FFB266}Prepped Square (Made by Ceedie)\n");
+	strcat(string, "{ffffff}MAP#15: {FFB266}Rock Hotel (Made by Ceedie)\n");
+	strcat(string, "{ffffff}MAP#16: {FFB266}Airport Construction (Made by Ceedie)\n");
+	strcat(string, "{ffffff}MAP#17: {FFB266}KACC Military (Made by Ceedie).\n");
+	strcat(string, "{ffffff}MAP#18: {FFB266}Ocean DocksCrane (Made by Ceedie).\n");
+	strcat(string, "{ffffff}MAP#19: {FFB266}SantaMaria Beach (Made by Ceedie).\n");
+	strcat(string, "{ffffff}MAP#20: {FFB266}Toy Story (Made by Ceedie).\n");
+	strcat(string, "{ffffff}MAP#21: {FFB266}Market Tunnel (Made by Justice (SjuteL)).\n");
+	strcat(string, "{ffffff}MAP#22: {FFB266}Liberty City (Made by Pride).\n");
+	strcat(string, "{ffffff}MAP#23: {FFB266}GroveSt Christmas (Made by LosTigeros/Patryk98).\n");
+	strcat(string, "{ffffff}MAP#24: {FFB266}Skyscraper (Made by Justice (SjuteL)).\n");
+	strcat(string, "{ffffff}MAP#25: {FFB266}Outpost (Unknown Creator).\n");
+	strcat(string, "{ffffff}MAP#26: {FFB266}Swamp (Made by Moody).\n");
+	
+	strcat(string, "\n\nWe're always adding new maps! Our mappers try their best to make enjoyable maps for you!\n\n\
+		If you're interested to become a mapper, then feel free to post the application on the forums!");
+	
+	return ShowPlayerDialog(playerid,DIALOG_MAPS,DIALOG_STYLE_MSGBOX,"{DC143C}Server Maps", string, "Close", "");
 }
 
 CMD:anims(playerid, params[])
