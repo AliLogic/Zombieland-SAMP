@@ -1,4 +1,4 @@
-# Changelog (Latest: Version 1 Build 2 R2 (patch 1))
+# Changelog (Latest: Version 1 Build 2 (patch 1))
 
 ### VERSION 1 BUILD 1
 1. Improved the indentation of the script at a lot of places.
@@ -30,10 +30,15 @@
 14. Optimized the script at lots of other places.
 15. More indentation fixes.
 
-#### VERSION 1 BUILD 2 R2 (patch 1)
+#### VERSION 1 BUILD 2 (patch 1)
 16. More code clean up.
 17. Renamed some variables.
 18. Optimized VIP labels code.
 19. General function changes:
 - Removed the two admin message function and added a new one.
 20. Fixed a mistake in headshot system code!
+
+#### VERSION 1 BUILD 2 (patch 2)
+21. Command changes:
+- Removed /unblockpm and /blockpm and added /dnd.
+- Updated /maps.
