@@ -2,7 +2,7 @@
 	Script licensed to Logic_
 	Copyright 2017-2018
 	Licensed under The Digital Millennium Copyright Act of 1998 (https://www.copyright.gov/legislation/dmca.pdf)
-	Version 1 Build 2
+	Version 1 Build 3
 
 	Formerly known as Zombieland (samp-zombieland.info)
 */
@@ -50,6 +50,9 @@
 
 #define		GetPlayerNameEx(%0)			\
 			pInfo[%0][pName]
+
+#define		GivePlayerXP(%0,%1)			\
+			pInfo[%0][pXP] += %1
 
 #define		MAX_PASSWORD_LEN			65
 #define		PASSWORD_SALT				"xxxtentacion" // anyways, you should use per-player salts
@@ -848,8 +851,7 @@ public OnGameModeInit()
 	AllowInteriorWeapons(1);
 	DisableInteriorEnterExits();
 
-	SetTimer("RandomMessages",	62000,	true);
-	SetTimer("AFKKicker",		60000,	true);
+	SetTimer("RandomMessages",	30000,	true);
 	SetTimer("AntiCheat",		3000,	true);
 	SetTimer("OneSecondUpdate",	1000,	true);
 
@@ -2203,136 +2205,167 @@ public OnPlayerText(playerid, text[]) { // Updated by Logic_
 	return 0;
 }
 
-public OnPlayerKeyStateChange(playerid, newkeys, oldkeys)
-{
-	if (newkeys == KEY_NO && pInfo[playerid][pTeam] == TEAM_ZOMBIE && pInfo[playerid][pSpawned])
-	{
+public OnPlayerKeyStateChange(playerid, newkeys, oldkeys) { // Modified by Logic_
+	
+	if (newkeys == KEY_NO && pInfo[playerid][pTeam] == TEAM_ZOMBIE && pInfo[playerid][pSpawned]) {
 		KillTimer(pASK_Timer[playerid]);
-		pASK_Timer[playerid] = SetTimerEx("EndAntiSpawnKill", 1, false, "i", playerid);
+		EndAntiSpawnKill(playerid);
 		SendClientMessage(playerid, 0xFFFFF55, "{ffffff}[{33FF99}ANTI-SK{ffffff}]: You Have Ended Your Spawn Protection.");
 	}
 
-	if (PRESSED(KEY_FIRE))
-	{
-		switch (GetPlayerWeapon(playerid))
-		{
-			case 2,3,5,6,7,8,9,10,11,12,13,14,15,18,26,28,35,36,37,39,40,41,42,43,44,45,46:
-			{
-				BanPlayer(playerid, "Weapon Hack", INVALID_PLAYER_ID);
-			}
-		}
-	}
+	if (PRESSED(KEY_FIRE)) {
+		
+		new vehicleid = GetPlayerVehicleID(playerid);
+		if (GetVehicleModel(vehicleid) == 564 && GetPlayerState(playerid) == PLAYER_STATE_DRIVER) {
 
-	if ((newkeys==KEY_FIRE)&&(IsPlayerInAnyVehicle(playerid))&&(GetPlayerState(playerid)==PLAYER_STATE_DRIVER))
-		{
-				if (GetVehicleModel(GetPlayerVehicleID(playerid)) == 564)
-				{
-						new Float:x,Float:y,Float:z,Float:x2,Float:y2,Float:az;
-						GetPlayerPos(playerid,x,y,z);
-						GetVehicleZAngle(GetPlayerVehicleID(playerid), az);
-						x2 = x + (30 * floatsin(-az+5, degrees));
-						y2 = y + (30 * floatcos(-az+5, degrees));
-						CreateExplosion(x2,y2,z,3,4.0);
+			new Float:x,Float:y,Float:z,Float:x2,Float:y2,Float:az;
+			GetPlayerPos(playerid,x,y,z);
+			GetVehicleZAngle(GetPlayerVehicleID(playerid), az);
+			x2 = x + (30 * floatsin(-az+5, degrees));
+			y2 = y + (30 * floatcos(-az+5, degrees));
+			CreateExplosion(x2,y2,z,3,4.0);
+		}
+		else {
+			if (pInfo[playerid][pTeam] == TEAM_HUMAN) {
+				if (GetPlayerWeapon(playerid) == WEAPON_CHAINSAW) {
+					ShowPlayerDialog(playerid,DIALOG_KICK,DIALOG_STYLE_MSGBOX,"Bugged!","You have been kicked due to chainsaw bug.\n Please reconnect, to solve the problem. Thank you!","Leave","");
+					return KickPlayer(playerid), 1;
 				}
-		}
-
-	if (PRESSED(KEY_FIRE))
-	{
-		if (pInfo[playerid][pTeam] == TEAM_HUMAN)
-		{
-			switch (GetPlayerWeapon(playerid))
-			{
-				case 9: ShowPlayerDialog(playerid,DIALOG_KICK,DIALOG_STYLE_MSGBOX,"Bugged!","You have been kicked due to chainsaw bug.\n Please reconnect, to solve the problem. Thank you!","Leave",""),KickPlayer(playerid);
 			}
-		}
-	}
+			else {
+				if (pInfo[playerid][pClass] == TANKERZOMBIE) {
+					if (gettime() - 1 < Abilitys[playerid][StomperPushing]) return GameTextForPlayer(playerid,"~r~ Still recovering", 1000, 5);
 
-	if (PRESSED(KEY_WALK))
-	{
-		if (pInfo[playerid][pTeam] == TEAM_HUMAN)
-		{
-			if (pInfo[playerid][pClass] == ENGINEER)
-			{
-				new Float:pz, Float:x, Float:y, Float:z;
-				GetPlayerFacingAngle(playerid, pz);
-				GetPlayerPos(playerid, Float:x, Float:y, Float:z);
+					new Float: x, Float: y, Float: z;
 
-				if (pInfo[playerid][pLadders] >= 1)
-				{
-					new string[128];
-					pInfo[playerid][pLadders] -= 1;
-					GetXYInFrontOfPlayer(playerid, Float:x,Float:y, 1.0);
-					CreateObject(1437,Float:x,Float:y,Float:z,-22.0,0.0,pz,500.0);
-					format(string, sizeof string,""chat" You have %i ladders left.",pInfo[playerid][pLadders]);
-					SendClientMessage(playerid,-1,string);
-					PlayerPlaySound(playerid,1057,0.0,0.0,0.0);
-				}
-				else return SendClientMessage(playerid,-1,""chat" You ran out of Ladders!");
-			}
-		}
-	}
-
-	if (PRESSED(KEY_WALK))
-	{
-		if (pInfo[playerid][pTeam] == TEAM_HUMAN)
-		{
-			if (pInfo[playerid][pClass] == VIPENGINEER)
-			{
-				new Float:pz, Float:x, Float:y, Float:z;
-				GetPlayerFacingAngle(playerid, pz);
-				GetPlayerPos(playerid, Float:x, Float:y, Float:z);
-
-				if (pInfo[playerid][pVipBoxes] >= 1)
-				{
-					new string[128];
-					pInfo[playerid][pVipBoxes] -= 1;
-					GetXYInFrontOfPlayer(playerid, Float:x,Float:y, 1.0);
-					CreateObject(1421,Float:x,Float:y,Float:z,0.0,0.0,pz,500.0);
-					format(string, sizeof string,""chat" You have %i boxes left.",pInfo[playerid][pVipBoxes]);
-					SendClientMessage(playerid,-1,string);
-					PlayerPlaySound(playerid,1057,0.0,0.0,0.0);
-				}
-				else return SendClientMessage(playerid,-1,""chat" You ran out of boxes!");
-			}
-		}
-	}
-
-	if (PRESSED(KEY_WALK))
-	{
-		if (pInfo[playerid][pTeam] == TEAM_HUMAN)
-		{
-			if (pInfo[playerid][pClass] == DOCTOR)
-			{
-				new Float:pz, Float:x, Float:y, Float:z;
-				GetPlayerFacingAngle(playerid, pz);
-				GetPlayerPos(playerid, Float:x, Float:y, Float:z);
-
-				if (pInfo[playerid][pDoctorShield] >= 1)
-				{
-					new string[128];
-					pInfo[playerid][pDoctorShield] -= 1;
-					GetXYInFrontOfPlayer(playerid, Float:x,Float:y, 1.0);
-					DocShield = CreateObject(3534,Float:x,Float:y,Float:z,0.0,0.0,pz,500.0);
-					format(string, sizeof string,""chat" You have %i Scientist shields left.",pInfo[playerid][pDoctorShield]);
-					SendClientMessage(playerid,-1,string);
-					PlayerPlaySound(playerid,1057,0.0,0.0,0.0);
-				}
-				else return SendClientMessage(playerid,-1,""chat" You ran out of shields!");
-			}
-		}
-	}
-
-	if (PRESSED(KEY_WALK))
-	{
-		if (pInfo[playerid][pTeam] == TEAM_ZOMBIE)
-		{
-			if (pInfo[playerid][pClass] == STOMPERZOMBIE)
-			{
-				if (gettime() - 6 < Abilitys[playerid][StomperPushing]) return GameTextForPlayer(playerid,"~w~ Still recovering",1000,5);
-				{
-					new Float:x,Float:y,Float:z,Float:Angle;
 					GetPlayerPos(playerid,Float:x,Float:y,Float:z);
-					GetPlayerFacingAngle(playerid,Float:Angle);
+					foreach (new i : Player) {
+						if (GetPlayerSkin(playerid) != NON_IMMUNE) continue;
+
+						if (GetDistanceBetweenPlayers(playerid, i) < 2.0) {
+							new Float: hp, victimid = GetClosestPlayer(playerid);
+
+							SetPlayerHealth(victimid, hp -20);
+							GetPlayerVelocity(i,Float:x,Float:y,Float:z);
+							SetPlayerVelocity(i,Float:x+0.3,Float:y+0.3,Float:z+0.2);
+
+							GivePlayerXP(playerid,10);
+							GameTextForPlayer(playerid,"~n~~n~~n~~n~~n~~y~+10 XP",3500,5);
+							Abilitys[playerid][StomperPushing] = gettime();
+						}
+					}
+				}
+			}
+		}
+	}
+
+	else if (PRESSED(KEY_JUMP))
+	{
+		if (pInfo[playerid][pTeam] == TEAM_ZOMBIE && pInfo[playerid][pClass] == HUNTERZOMBIE)
+		{
+			if (gettime() - 2 < Abilitys[playerid][HighJumpZombie]) return GameTextForPlayer(playerid,"~w~ Still recovering",1000,5);
+
+			new Float:x,Float:y,Float:z;
+			GetPlayerVelocity(playerid, x, y, z);
+			SetPlayerVelocity(playerid, x*4.0, y*4.0, z + 0.8 * 1.2);
+			Abilitys[playerid][HighJumpZombie] = gettime();
+		}
+	}
+
+	else if (PRESSED(KEY_WALK)) {
+		if (pInfo[playerid][pTeam] == TEAM_HUMAN) {
+			switch (pInfo[playerid][pClass]) {
+
+				case ENGINEER: {
+					new Float:pz, Float:x, Float:y, Float:z;
+					GetPlayerFacingAngle(playerid, pz);
+					GetPlayerPos(playerid, Float:x, Float:y, Float:z);
+
+					if (pInfo[playerid][pLadders] >= 1)
+					{
+						new string[128];
+						pInfo[playerid][pLadders] -= 1;
+						GetXYInFrontOfPlayer(playerid, Float:x,Float:y, 1.0);
+						CreateObject(1437,Float:x,Float:y,Float:z,-22.0,0.0,pz,500.0);
+						format(string, sizeof string,""chat" You have %i ladders left.",pInfo[playerid][pLadders]);
+						SendClientMessage(playerid,-1,string);
+						PlayerPlaySound(playerid,1057,0.0,0.0,0.0);
+					}
+					else return SendClientMessage(playerid,-1,""chat" You ran out of Ladders!");
+				}
+
+				case VIPENGINEER: {
+					new Float:pz, Float:x, Float:y, Float:z;
+					GetPlayerFacingAngle(playerid, pz);
+					GetPlayerPos(playerid, Float:x, Float:y, Float:z);
+
+					if (pInfo[playerid][pVipBoxes] >= 1)
+					{
+						new string[128];
+						pInfo[playerid][pVipBoxes] -= 1;
+						GetXYInFrontOfPlayer(playerid, Float:x,Float:y, 1.0);
+						CreateObject(1421,Float:x,Float:y,Float:z,0.0,0.0,pz,500.0);
+						format(string, sizeof string,""chat" You have %i boxes left.",pInfo[playerid][pVipBoxes]);
+						SendClientMessage(playerid,-1,string);
+						PlayerPlaySound(playerid,1057,0.0,0.0,0.0);
+					}
+					else return SendClientMessage(playerid,-1,""chat" You ran out of boxes!");
+				}
+
+				case DOCTOR: {
+					new Float:pz, Float:x, Float:y, Float:z;
+					GetPlayerFacingAngle(playerid, pz);
+					GetPlayerPos(playerid, Float:x, Float:y, Float:z);
+
+					if (pInfo[playerid][pDoctorShield] >= 1)
+					{
+						new string[128];
+						pInfo[playerid][pDoctorShield] -= 1;
+						GetXYInFrontOfPlayer(playerid, Float:x,Float:y, 1.0);
+						DocShield = CreateObject(3534,Float:x,Float:y,Float:z,0.0,0.0,pz,500.0);
+						format(string, sizeof string,""chat" You have %i Scientist shields left.",pInfo[playerid][pDoctorShield]);
+						SendClientMessage(playerid,-1,string);
+						PlayerPlaySound(playerid,1057,0.0,0.0,0.0);
+					}
+					else return SendClientMessage(playerid,-1,""chat" You ran out of shields!");
+				}
+
+				case MEDIC: {
+					new victimid = GetClosestPlayer(playerid);
+					
+					switch (GetPlayerSkin(victimid))
+					{
+						case NON_IMMUNE:
+						{
+							if (GetDistanceBetweenPlayers(playerid,victimid) > 10.0) return 1;
+
+							if (pInfo[victimid][IsPlayerInfected]) {
+								CurePlayer(victimid);
+								GivePlayerXP(playerid,10);
+								GameTextForPlayer(playerid,"~n~~n~~n~~n~~n~~y~+10 XP",3500,5);
+							}
+							else return SendClientMessage(playerid,-1,""chat" No one around you is infected.");
+						}
+					}
+				}
+
+				case SCOUT: {
+					if (gettime() - 6 < Abilitys[playerid][HighJumpScout]) return GameTextForPlayer(playerid,"~w~ Still recovering",1000,5);
+
+					new Float:x,Float:y,Float:z;
+					GetPlayerVelocity(playerid,Float:x,Float:y,Float:z);
+					SetPlayerVelocity(playerid,Float:x,Float:y*0.9,Float:z+0.5* 0.9);
+					Abilitys[playerid][HighJumpScout] = gettime();
+				}
+			}
+		}
+		else {
+			switch (pInfo[playerid][pClass]) {
+				case STOMPERZOMBIE: {
+					if (gettime() - 6 < Abilitys[playerid][StomperPushing]) return GameTextForPlayer(playerid,"~w~ Still recovering",1000,5);
+
+					new Float:x,Float:y,Float:z;
+					GetPlayerPos(playerid,Float:x,Float:y,Float:z);
 					ApplyAnimation(playerid, "ped", "Shove_Partial", 2.1, 0, 0, 0, 0, 0);
 
 					foreach(new i : Player)
@@ -2344,10 +2377,8 @@ public OnPlayerKeyStateChange(playerid, newkeys, oldkeys)
 								if (GetDistanceBetweenPlayers(playerid,i) < 6.0)
 								{
 									GetClosestPlayer(i);
-									GetPlayerFacingAngle(i,Float:Angle);
 									GetPlayerVelocity(i,Float:x,Float:y,Float:z);
 									SetPlayerVelocity(i,Float:x+0.3,Float:y+0.3,Float:z+0.2);
-									SetPlayerFacingAngle(i,Float:Angle);
 									GivePlayerXP(playerid,10);
 									GameTextForPlayer(playerid,"~n~~n~~n~~n~~n~~y~+10 XP",3500,5);
 									Abilitys[playerid][StomperPushing] = gettime();
@@ -2356,451 +2387,199 @@ public OnPlayerKeyStateChange(playerid, newkeys, oldkeys)
 						}
 					}
 				}
-			}
-		}
-	}
 
-	if (PRESSED(KEY_FIRE))
-	{
-		if (pInfo[playerid][pTeam] == TEAM_ZOMBIE)
-		{
-			if (pInfo[playerid][pClass] == TANKERZOMBIE)
-			{
-				if (gettime() - 1 < Abilitys[playerid][StomperPushing]) return GameTextForPlayer(playerid,"~r~ Still recovering",1000,5);
-				{
-					new Float:x,Float:y,Float:z,Float:Angle;
-					GetPlayerPos(playerid,Float:x,Float:y,Float:z);
-					GetPlayerFacingAngle(playerid,Float:Angle);
+				case MUTATEDZOMBIE: {
+					if (gettime() - 10 < Abilitys[playerid][AdvancedMutatedCooldown]) return GameTextForPlayer(playerid,"~w~ Still recovering",1000,5);
+
 					foreach(new i : Player)
 					{
 						switch (GetPlayerSkin(i))
 						{
-							case NON_IMMUNE:
+							case NON_IMMUNE, 70:
 							{
-								if (GetDistanceBetweenPlayers(playerid,i) < 2.0)
+								if (GetDistanceBetweenPlayers(playerid, i) > 6.5) continue;
+
+								if (pInfo[i][IsPlayerInfected] == 0)
 								{
-									new Float:hp,victimid = GetClosestPlayer(playerid);
-									GetClosestPlayer(i);
-									SetPlayerHealth(victimid, hp -20);
-									GetPlayerFacingAngle(i,Float:Angle);
-									GetPlayerVelocity(i,Float:x,Float:y,Float:z);
-									SetPlayerVelocity(i,Float:x+0.3,Float:y+0.3,Float:z+0.2);
-									SetPlayerFacingAngle(i,Float:Angle);
+									InfectPlayerStandard(i);
 									GivePlayerXP(playerid,10);
 									GameTextForPlayer(playerid,"~n~~n~~n~~n~~n~~y~+10 XP",3500,5);
-									Abilitys[playerid][StomperPushing] = gettime();
+									Abilitys[playerid][AdvancedMutatedCooldown] = gettime();
 								}
 							}
 						}
 					}
 				}
-			}
-		}
-	}
 
-	if (PRESSED(KEY_WALK))
-	{
-		if (pInfo[playerid][pTeam] == TEAM_ZOMBIE)
-		{
-			if (pInfo[playerid][pClass] == MUTATEDZOMBIE)
-			{
-				if (gettime() - 10 < Abilitys[playerid][AdvancedMutatedCooldown]) return GameTextForPlayer(playerid,"~w~ Still recovering",1000,5);
-				{
-					foreach(new i : Player)
-					{
-						switch (GetPlayerSkin(i))
-						{
-							case NON_IMMUNE,70:
-							{
-								if (GetDistanceBetweenPlayers(playerid,i) < 6.5)
-								{
-									if (pInfo[i][IsPlayerInfected] == 0)
-									{
-										InfectPlayerStandard(i);
-										GivePlayerXP(playerid,10);
-										GameTextForPlayer(playerid,"~n~~n~~n~~n~~n~~y~+10 XP",3500,5);
-										Abilitys[playerid][AdvancedMutatedCooldown] = gettime();
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
+				case SCREAMERZOMBIE: {
+					if (gettime() - 12 < Abilitys[playerid][ScreamerZombieAb2]) return GameTextForPlayer(playerid,"~w~ Still recovering",1000,5);
 
-	if (PRESSED(KEY_WALK))
-	{
-		if (pInfo[playerid][pTeam] == TEAM_ZOMBIE)
-		{
-			if (pInfo[playerid][pClass] == SCREAMERZOMBIE)
-			{
-				if (gettime() - 12 < Abilitys[playerid][ScreamerZombieAb2]) return GameTextForPlayer(playerid,"~w~ Still recovering",1000,5);
-				{
 					foreach(new i : Player)
 					{
 						switch (GetPlayerSkin(i))
 						{
 							case NON_IMMUNE:
 							{
-								if (GetDistanceBetweenPlayers(playerid,i) < 8.0)
+								if (GetDistanceBetweenPlayers(playerid,i) > 8.0) continue;
+
+								new Float:hp;
+								GetClosestPlayer(i);
+								ApplyAnimation(i, "PED", "BIKE_fall_off", 4.1, 0, 1, 1, 1, 0, 1);
+								GameTextForPlayer(i,"~n~~n~~n~~n~~g~Screamer Attacked",3500,5);
+								SetTimerEx("ScreamerClearAnim",1500,0,"i",i);
+								GivePlayerXP(playerid,10);
+								GetPlayerHealth(playerid,hp);
+								Abilitys[playerid][ScreamerZombieAb2] = gettime();
+								if (hp <= 80)
 								{
-									new Float:hp;
-									GetClosestPlayer(i);
-									ApplyAnimation(i, "PED", "BIKE_fall_off", 4.1, 0, 1, 1, 1, 0, 1);
-									GameTextForPlayer(i,"~n~~n~~n~~n~~g~Screamer Attacked",3500,5);
-									SetTimerEx("ScreamerClearAnim",1500,0,"i",i);
-									GivePlayerXP(playerid,10);
 									GetPlayerHealth(playerid,hp);
-									Abilitys[playerid][ScreamerZombieAb2] = gettime();
-									if (hp <= 80)
-									{
-										GetPlayerHealth(playerid,hp);
-										SetPlayerHealth(playerid,hp+10);
-									}
-									else return SendClientMessage(playerid,-1,""chat""COL_PINK" {E5CCFF}Screamed sucessfully, but was not able to gain HP, because you have enough HP (80).");
+									SetPlayerHealth(playerid,hp+10);
 								}
+								else return SendClientMessage(playerid,-1,""chat""COL_PINK" {E5CCFF}Screamed sucessfully, but was not able to gain HP, because you have enough HP (80).");
 							}
 						}
 					}
 				}
-			}
-		}
-	}
 
-	if (PRESSED(KEY_WALK))
-	{
-		if (pInfo[playerid][pTeam] == TEAM_HUMAN)
-		{
-			if (pInfo[playerid][pClass] == MEDIC)
-			{
-				new victimid = GetClosestPlayer(playerid);
-				if (IsPlayerConnected(victimid))
-				{
-					switch (GetPlayerSkin(victimid))
-					{
-						case NON_IMMUNE:
-						{
-							if (GetDistanceBetweenPlayers(playerid,victimid) < 10.0)
-							{
-								if (pInfo[victimid][IsPlayerInfected] == 1)
-								{
-									CurePlayer(victimid);
-									GivePlayerXP(playerid,10);
-									GameTextForPlayer(playerid,"~n~~n~~n~~n~~n~~y~+10 XP",3500,5);
-								}
-								else return SendClientMessage(playerid,-1,""chat" No one around you is infected.");
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	if (PRESSED(KEY_JUMP))
-	{
-		if (pInfo[playerid][pTeam] == TEAM_ZOMBIE)
-		{
-			if (pInfo[playerid][pClass] == HUNTERZOMBIE)
-			{
-				if (gettime() - 2 < Abilitys[playerid][HighJumpZombie]) return GameTextForPlayer(playerid,"~w~ Still recovering",1000,5);
-				{
+				case SEEKER: {
+					if (gettime() - 30 < Abilitys[playerid][StomperPushing]) return GameTextForPlayer(playerid,"~w~ Still recovering",1000,5);
 					new Float:x,Float:y,Float:z;
-					GetPlayerVelocity(playerid,Float:x,Float:y,Float:z);
-					SetPlayerVelocity(playerid,Float:x*4.0,Float:y*4.0,Float:z+0.8* 1.2);
-					Abilitys[playerid][HighJumpZombie] = gettime();
-				}
-			}
-		}
-	}
-
-	if (newkeys & KEY_WALK) {
-		if (pInfo[playerid][pTeam]== TEAM_ZOMBIE) {
-			if (pInfo[playerid][pClass] == SEEKER) {
-				if (gettime() - 30 < Abilitys[playerid][StomperPushing]) return GameTextForPlayer(playerid,"~w~ Still recovering",1000,5);
-				new Float:x,Float:y,Float:z;
-				foreach(new i : Player)
-				{
-					if (pInfo[i][pTeam] == TEAM_HUMAN)
+					foreach(new i : Player)
 					{
-						GetClosestPlayer(i);
-						GetPlayerPos(i,x,y,z);
-						SetPlayerPos(playerid,x,y,z);
-						Abilitys[playerid][StomperPushing] = gettime();
+						if (pInfo[i][pTeam] == TEAM_HUMAN)
+						{
+							GetClosestPlayer(i);
+							GetPlayerPos(i,x,y,z);
+							SetPlayerPos(playerid,x,y,z);
+							Abilitys[playerid][StomperPushing] = gettime();
+							break;
+						}
 					}
-
 				}
-			}
-		 }
-	}
 
-	if (PRESSED(KEY_WALK))
-	{
-		if (pInfo[playerid][pTeam] == TEAM_ZOMBIE)
-		{
-			if (pInfo[playerid][pClass] == ROGUE)
-			{
-				if (gettime() - 30 < Abilitys[playerid][StomperPushing]) return GameTextForPlayer(playerid,"~w~ Still recovering",1000,5);
-				{
+				case ROGUE: {
+					if (gettime() - 30 < Abilitys[playerid][StomperPushing]) return GameTextForPlayer(playerid,"~w~ Still recovering",1000,5);
+
 					SetPlayerColor(playerid,COLOR_HUMAN);
 					SetPlayerSkin(playerid,15);
 					SetTimerEx("RogueTimer", 30000, 0, "i", playerid);
 					Abilitys[playerid][StomperPushing] = gettime();
 				}
-			}
-		}
-	}
 
-	if (PRESSED(KEY_WALK))
-	{
-		if (pInfo[playerid][pTeam] == TEAM_HUMAN)
-		{
-			if (pInfo[playerid][pClass] == SCOUT)
-			{
-				if (gettime() - 6 < Abilitys[playerid][HighJumpScout]) return GameTextForPlayer(playerid,"~w~ Still recovering",1000,5);
-				{
-					new Float:x,Float:y,Float:z;
-					GetPlayerVelocity(playerid,Float:x,Float:y,Float:z);
-					SetPlayerVelocity(playerid,Float:x,Float:y*0.9,Float:z+0.5* 0.9);
-					Abilitys[playerid][HighJumpScout] = gettime();
+				case WITCHZOMBIE: {
+					new victimid = GetClosestPlayer(playerid);
+
+					if (pInfo[victimid][pAdminDuty]) return 1;
+
+					switch (GetPlayerSkin(victimid)) {
+						case NON_IMMUNE, 68, 70: {
+							if (GetDistanceBetweenPlayers(playerid,victimid) > 1.5) return 1;
+							if (gettime() - 15 < Abilitys[playerid][WitchAttack2]) return GameTextForPlayer(playerid, "~w~ Still recovering", 4000, 5);
+
+							new Float:hp, zmstring[144];
+							GetPlayerHealth(victimid,hp);
+							SetPlayerHealth(victimid, hp -45);
+							GameTextForPlayer(victimid,"~n~~n~~n~~n~~y~Witch attacked",3000,5);
+							GivePlayerXP(playerid,10);
+							format(zmstring,sizeof(zmstring), ""chat""COL_PINK" {66B2FF}%s{E5CCFF} has been witch attacked by {FF6666}%s", GetPlayerNameEx(victimid), GetPlayerNameEx(playerid));
+							SendClientMessageToAll(-1,zmstring);
+							Abilitys[playerid][WitchAttack2] = gettime();
+						}
+					}
 				}
-			}
-		}
-	}
 
-	if (PRESSED(KEY_WALK))
-	{
-		if (pInfo[playerid][pTeam] == TEAM_ZOMBIE)
-		{
-			if (pInfo[playerid][pClass] == WITCHZOMBIE)
-			{
-				new victimid = GetClosestPlayer(playerid);
-				if (IsPlayerConnected(victimid))
-				{
+				case STANDARDZOMBIE: {
+					new victimid = GetClosestPlayer(playerid);
+
+					if (gettime() - 7 < Abilitys[playerid][InfectionNormal]) return GameTextForPlayer(playerid,"~b~ Still recovering",4000,5);
+
+					if (pInfo[victimid][pAdminDuty]) return 1;
+					if (pInfo[victimid][IsPlayerInfected]) return 1;
+
 					switch (GetPlayerSkin(victimid))
 					{
-						case NON_IMMUNE, 68,70:
+						case NON_IMMUNE, 70:
 						{
-							if (GetDistanceBetweenPlayers(playerid,victimid) < 1.5)
-							{
-								if (gettime() - 15 < Abilitys[playerid][WitchAttack2]) return GameTextForPlayer(playerid,"~w~ Still recovering",4000,5);
-								{
-								   if (pInfo[victimid][pAdminDuty] == 0)
-								   {
-									new Float:hp,zmstring[256];
-									GetPlayerHealth(victimid,hp);
-									SetPlayerHealth(victimid, hp -45);
-									GameTextForPlayer(victimid,"~n~~n~~n~~n~~y~Witch attacked",3000,5);
-									GivePlayerXP(playerid,10);
-									format(zmstring,sizeof(zmstring), ""chat""COL_PINK" {66B2FF}%s{E5CCFF} has been witch attacked by {FF6666}%s", GetPlayerNameEx(victimid), GetPlayerNameEx(playerid));
-									SendClientMessageToAll(-1,zmstring);
-									Abilitys[playerid][WitchAttack2] = gettime();
-									}
-									else if (pInfo[victimid][pAdminDuty] == 1)
-									{
-									SendClientMessage(playerid,COLOR_RED,"That player can't be infected because is on admin duty!");
-									}
-								}
-							}
+							if (GetDistanceBetweenPlayers(playerid,victimid) > 2.0) return 1;
+
+							new zmstring[256];
+							InfectPlayerStandard(victimid);
+							format(zmstring,sizeof(zmstring), ""chat""COL_PINK" {66B2FF}%s{E5CCFF} has been infected by {FF6666}%s",GetPlayerNameEx(victimid), GetPlayerNameEx(playerid));
+							SendClientMessageToAll(-1,zmstring);
+							GivePlayerXP(playerid,10);
+							GameTextForPlayer(playerid,"~n~~n~~n~~n~~n~~y~+10 XP",3500,5);
+							Abilitys[playerid][InfectionNormal] = gettime();
 						}
 					}
 				}
-			}
-		}
-	}
 
-	if (PRESSED(KEY_WALK))
-	{
-		if (pInfo[playerid][pTeam] == TEAM_ZOMBIE)
-		{
-			if (pInfo[playerid][pClass] == STANDARDZOMBIE)
-			{
-				new victimid = GetClosestPlayer(playerid);
-				if (gettime() - 7 < Abilitys[playerid][InfectionNormal]) return GameTextForPlayer(playerid,"~b~ Still recovering",4000,5);
-				{
-					if (IsPlayerConnected(victimid))
-					{
-						switch (GetPlayerSkin(victimid))
-						{
-							case NON_IMMUNE,70:
-							{
-								if (GetDistanceBetweenPlayers(playerid,victimid) < 2.0)
-								{
-									if (pInfo[victimid][IsPlayerInfected] == 0)
-									{
-										if (pInfo[victimid][pAdminDuty] == 0)
-										{
-											new zmstring[256];
-											InfectPlayerStandard(victimid);
-											format(zmstring,sizeof(zmstring), ""chat""COL_PINK" {66B2FF}%s{E5CCFF} has been infected by {FF6666}%s",GetPlayerNameEx(victimid), GetPlayerNameEx(playerid));
-											SendClientMessageToAll(-1,zmstring);
-											GivePlayerXP(playerid,10);
-											GameTextForPlayer(playerid,"~n~~n~~n~~n~~n~~y~+10 XP",3500,5);
-											Abilitys[playerid][InfectionNormal] = gettime();
-										}
-										else return SendClientMessage(playerid,-1,""chat" Player is already infected!");
-									}
-								}
-							}
+				case SMOKERZOMBIE: {
+					new victimid = GetClosestPlayer(playerid);
+
+					if (gettime() - 7 < Abilitys[playerid][InfectionNormal]) return GameTextForPlayer(playerid,"~b~ Still recovering",4000,5);
+
+					if (pInfo[victimid][pAdminDuty]) return 1;
+					if (pInfo[victimid][IsPlayerInfected]) return 1;
+
+					switch (GetPlayerSkin(victimid)) {
+						case NON_IMMUNE, 70: {
+							if (GetDistanceBetweenPlayers(playerid,victimid) > 2.0) return 1;
+							
+							new zmstring[256];
+							InfectPlayerStandard(victimid);
+							smokegas[playerid] = SetPlayerAttachedObject(playerid, 7, 18729, 18, -2.2709, 1.1330, -5.0079, -6.0999, 109.2999, -98.0999, 1.0000, 1.0000, 1.0000, 0, 0);
+							SetTimerEx("Smoke",5000,0,"i",playerid);
+							format(zmstring,sizeof(zmstring), ""chat""COL_PINK" {66B2FF}%s{E5CCFF} has been infected by {FF6666}%s",GetPlayerNameEx(victimid), GetPlayerNameEx(playerid));
+							SendClientMessageToAll(-1,zmstring);
+							GivePlayerXP(playerid,10);
+							GameTextForPlayer(playerid,"~n~~n~~n~~n~~n~~y~+10 XP",3500,5);
+							Abilitys[playerid][InfectionNormal] = gettime();
 						}
 					}
 				}
-			}
-		}
-	}
 
-	if (PRESSED(KEY_WALK))
-	{
-		if (pInfo[playerid][pTeam] == TEAM_ZOMBIE)
-		{
-			if (pInfo[playerid][pClass] == SMOKERZOMBIE)
-			{
-				new victimid = GetClosestPlayer(playerid);
-				if (gettime() - 7 < Abilitys[playerid][InfectionNormal]) return GameTextForPlayer(playerid,"~b~ Still recovering",4000,5);
-				{
-					if (IsPlayerConnected(victimid))
-					{
-						switch (GetPlayerSkin(victimid))
-						{
-							case NON_IMMUNE,70:
-							{
-								if (GetDistanceBetweenPlayers(playerid,victimid) < 2.0)
-								{
-									if (pInfo[victimid][IsPlayerInfected] == 0)
-									{
-										if (pInfo[victimid][pAdminDuty] == 0)
-										{
-											new zmstring[256];
-											InfectPlayerStandard(victimid);
-											smokegas[playerid] = SetPlayerAttachedObject(playerid, 7, 18729, 18, -2.2709, 1.1330, -5.0079, -6.0999, 109.2999, -98.0999, 1.0000, 1.0000, 1.0000, 0, 0);
-											SetTimerEx("Smoke",5000,0,"i",playerid);
-											format(zmstring,sizeof(zmstring), ""chat""COL_PINK" {66B2FF}%s{E5CCFF} has been infected by {FF6666}%s",GetPlayerNameEx(victimid), GetPlayerNameEx(playerid));
-											SendClientMessageToAll(-1,zmstring);
-											GivePlayerXP(playerid,10);
-											GameTextForPlayer(playerid,"~n~~n~~n~~n~~n~~y~+10 XP",3500,5);
-											Abilitys[playerid][InfectionNormal] = gettime();
-										}
-										else return SendClientMessage(playerid,-1,""chat" Player is already infected!");
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	if (PRESSED(KEY_WALK))
-	{
-		if (pInfo[playerid][pTeam] == TEAM_ZOMBIE)
-		{
-			if (pInfo[playerid][pClass] == MUTATEDZOMBIE)
-			{
-				new victimid = GetClosestPlayer(playerid);
-				if (gettime() - 7 < Abilitys[playerid][InfectionMutated]) return GameTextForPlayer(playerid,"~b~ Still recovering",4000,5);
-				{
-					if (IsPlayerConnected(victimid))
-					{
-						switch (GetPlayerSkin(victimid))
-						{
-							case NON_IMMUNE,70:
-							{
-								if (GetDistanceBetweenPlayers(playerid,victimid) < 1.7)
-								{
-									if (pInfo[victimid][IsPlayerInfected] == 0)
-									{
-										new zmstring[256];
-										InfectPlayerMutated(victimid);
-										format(zmstring,sizeof(zmstring), ""chat""COL_PINK" {66B2FF}%s{E5CCFF} has been infected by {FF6666}%s",GetPlayerNameEx(victimid), GetPlayerNameEx(playerid));
-										SendClientMessageToAll(-1,zmstring);
-										GivePlayerXP(playerid,10);
-										GameTextForPlayer(playerid,"~n~~n~~n~~n~~n~~y~+10 XP",3500,5);
-										Abilitys[playerid][InfectionMutated] = gettime();
-									}
-									else return SendClientMessage(playerid,-1,""chat" Player is already infected!");
-								}
-							}
-						}
-					}
-				}
-			}
-		 }
-	}
-
-	if (PRESSED(KEY_WALK))
-	{
-		if (pInfo[playerid][pTeam] == TEAM_ZOMBIE)
-		{
-			if (pInfo[playerid][pClass] == FLESHEATER)
-			{
-				new victimid = GetClosestPlayer(playerid);
-				if (gettime() - 18 < Abilitys[playerid][InfectionFleshEater]) return GameTextForPlayer(playerid,"~b~ Still recovering",4000,5);
-				{
-					if (IsPlayerConnected(victimid))
-					{
-						switch (GetPlayerSkin(victimid))
-						{
-							case NON_IMMUNE:
-							{
-								if (GetDistanceBetweenPlayers(playerid,victimid) < 1.7)
-								{
-									if (pInfo[victimid][IsPlayerInfected] == 0)
-									{
-										new zmstring[256];
-										InfectPlayerFleshEater(victimid);
-										format(zmstring,sizeof(zmstring), ""chat""COL_PINK" {66B2FF}%s{E5CCFF} has been bitten and infected by {FF6666}%s",GetPlayerNameEx(victimid), GetPlayerNameEx(playerid));
-										SendClientMessageToAll(-1,zmstring);
-										GivePlayerXP(playerid,10);
-										GameTextForPlayer(playerid,"~n~~n~~n~~n~~n~~y~+10 XP",3500,5);
-										Abilitys[playerid][InfectionFleshEater] = gettime();
-									}
-									else return SendClientMessage(playerid,-1,""chat" Player is already infected!");
-								}
-							}
-						}
-					}
-				}
-			}
-		 }
-	}
-
-	if (PRESSED(KEY_WALK))
-	{
-		if (pInfo[playerid][pTeam] == TEAM_ZOMBIE)
-		{
-			if (pInfo[playerid][pClass] == BOOMERZOMBIE)
-			{
-				if (IsPlayerInRangeOfPoint(playerid,8.0,Map[ZombieSpawnX],Map[ZombieSpawnY],Map[ZombieSpawnZ]))
-				{
-					GameTextForPlayer(playerid,"~r~You Can't explode near the Zombie spawn!",4000,5);
-				}
-				else
-				{
+				case BOOMERZOMBIE: {
+					if (IsPlayerInRangeOfPoint(playerid,7.0,Map[ZombieSpawnX],Map[ZombieSpawnY],Map[ZombieSpawnZ])) return GameTextForPlayer(playerid,"~r~You Can't explode near the Zombie spawn!",4000,5);
+					
 					new Float:x,Float:y,Float:z;
 					GetPlayerPos(playerid,Float:x,Float:y,Float:z);
 					SetPlayerHealth(playerid,0.0);
 					CreateExplosion(Float:x,Float:y,Float:z,0,6.0);
 					foreach(new i : Player)
 					{
-						GetClosestPlayer(i);
-						if (IsPlayerConnected(i))
+						switch (GetPlayerSkin(i))
 						{
-							switch (GetPlayerSkin(i))
+							case NON_IMMUNE:
 							{
-								case NON_IMMUNE:
+								if (IsPlayerInRangeOfPoint(i,7.0,Float:x, Float:y, Float:z))
 								{
-									if (IsPlayerInRangeOfPoint(i,7.0,Float:x,Float:y,Float:z))
-									{
-										if (pInfo[i][IsPlayerInfected] == 0)
-										{
-											InfectPlayerStandard(i);
-										}
-									}
+									if (!pInfo[i][IsPlayerInfected]) InfectPlayerStandard(i);
 								}
 							}
+						}
+					}
+				}
+
+				case FLESHEATER: {
+					new victimid = GetClosestPlayer(playerid);
+					if (gettime() - 18 < Abilitys[playerid][InfectionFleshEater]) return GameTextForPlayer(playerid,"~b~ Still recovering",4000,5);
+
+					if (GetDistanceBetweenPlayers(playerid,victimid) > 1.7) return 1;
+					switch (GetPlayerSkin(victimid))
+					{
+						case NON_IMMUNE:
+						{
+							if (pInfo[victimid][IsPlayerInfected] == 0)
+							{
+								new zmstring[256];
+								InfectPlayerFleshEater(victimid);
+								format(zmstring,sizeof(zmstring), ""chat""COL_PINK" {66B2FF}%s{E5CCFF} has been bitten and infected by {FF6666}%s",GetPlayerNameEx(victimid), GetPlayerNameEx(playerid));
+								SendClientMessageToAll(-1,zmstring);
+								GivePlayerXP(playerid,10);
+								GameTextForPlayer(playerid,"~n~~n~~n~~n~~n~~y~+10 XP",3500,5);
+								Abilitys[playerid][InfectionFleshEater] = gettime();
+							}
+							else return SendClientMessage(playerid,-1,""chat" Player is already infected!");
 						}
 					}
 				}
@@ -2810,14 +2589,12 @@ public OnPlayerKeyStateChange(playerid, newkeys, oldkeys)
 	return 1;
 }
 
-public OnVehicleMod(playerid, vehicleid, componentid)
-{
+public OnVehicleMod(playerid, vehicleid, componentid) {
 	BanPlayer(playerid, "Vehicle Modding", INVALID_PLAYER_ID);
 	return 0;
 }
 
-custom GetPlayerSpeedSpeedo(playerid, bool:kmh)
-{
+custom GetPlayerSpeedSpeedo(playerid, bool:kmh) {
 	new Float:Vx, Float:Vy, Float:Vz, Float:rtn;
 	if (IsPlayerInAnyVehicle(playerid)) GetVehicleVelocity(GetPlayerVehicleID(playerid),Vx,Vy,Vz);
 	else GetPlayerVelocity(playerid,Vx,Vy,Vz);
@@ -2827,39 +2604,43 @@ custom GetPlayerSpeedSpeedo(playerid, bool:kmh)
 	return kmh ? floatround(rtn * 1.61) : floatround(rtn);
 }
 
-public OnPlayerUpdate(playerid)
-{
+public OnPlayerUpdate(playerid) {
+	// ...
 	return 1;
 }
 
 forward AntiCheat();
-public AntiCheat()
-{	
-	new Float:x, Float:y, Float:z, str[65];
+public AntiCheat() {
+	
+	new Float:x, Float:y, Float:z, str[65], weaponid;
 
-	foreach(new i : Player)
-	{
+	foreach(new i : Player) {
+		weaponid = GetPlayerWeapon(i);
 		GetPlayerVelocity(i, x, y, z);
 
-		if ((x <= -0.800000  || y <= -0.800000 || z <= -0.800000) && GetPlayerAnimationIndex(i) == 1008)
-		{
+		if ((x <= -0.800000  || y <= -0.800000 || z <= -0.800000) && GetPlayerAnimationIndex(i) == 1008) {
 			format(str, sizeof str, "[AC] Fly hack detected on %s (%d).", GetPlayerNameEx(i), i);
 			SendMessageToAdmins(str, COLOR_RED);
 		}
 
-		if (GetPlayerSpeedSpeedo(i, true) > 400)
-		{
+		if (GetPlayerSpeedSpeedo(i, true) > 400) {
 			format(str, sizeof str, "[AC] Speed hacks detected on %s (%d).", GetPlayerNameEx(i), i);
 			SendMessageToAdmins(str, COLOR_RED);
 		}
 
-		if (GetPlayerWeapon(i) == 38 && !pInfo[i][Minigun])
-		{
-			format(str, sizeof str, "[AC] Banned %s (%d) for Minigun hack.", GetPlayerNameEx(i), i);
+		switch (weaponid) {
+			case 38: {
+				if (pInfo[i][Minigun]) continue;
+				
+				BanPlayer(i, "Minigun hack", INVALID_PLAYER_ID);
+			}
+			
+			case 2,3,5,6,7,8,9,10,11,12,13,14,15,18,26,28,35,36,37,39,40,41,42,43,44,45,46: {
+				BanPlayer(i, "Weapon Hack", INVALID_PLAYER_ID);
+			}
 		}
 
-		if (IsPlayerInWater(i))
-		{
+		if (IsPlayerInWater(i)) {
 			SetPlayerHealth(i, 0.0);
 		}
 	}
@@ -2867,13 +2648,14 @@ public AntiCheat()
 	return 1;
 }
 
-public OnPlayerCommandPerformed(playerid, cmdtext[], success)
-{
-	if (!success)
-	{
+public OnPlayerCommandPerformed(playerid, cmdtext[], success) {
+	
+	if (!success) {
+
 		PlayerPlaySound(playerid,1054,0.0,0.0,0.0),
 		SendClientMessage(playerid,-1,"{ffffff}[{FF0000}ERROR{ffffff}]: Unknown or incorrect command!");
 	}
+	
 	return 1;
 }
 
@@ -3004,14 +2786,13 @@ CMD:heal(playerid,params[])
 
 CMD:admins(playerid, params[])
 {
-	new adminstring[1000], count;
+	new adminstring[600], count;
 	foreach (new i : Player)
 	{
-		if (pInfo[i][pAdminLevel] > 0)
-		{
-			format(adminstring, sizeof(adminstring),"%s%s: %s\n", adminstring, GetAdminRankName(i), GetPlayerNameEx(i));
-			count++;
-		}
+		if (!pInfo[i][pAdminLevel]) continue;
+
+		format(adminstring, sizeof(adminstring),"%s%s: %s\n", adminstring, GetAdminRankName(i), GetPlayerNameEx(i));
+		count++;
 	}
 	
 	if (!count) return SendClientMessage(playerid, COLOR_GREY, "There are currently no Administrators online.");
@@ -3021,14 +2802,13 @@ CMD:admins(playerid, params[])
 
 CMD:vips(playerid, params[])
 {
-	new vipstring[1000], count;
+	new vipstring[600], count;
 	foreach (new i : Player)
 	{
-		if (pInfo[i][pVipLevel] > 0)
-		{
-			format(vipstring, sizeof(vipstring),"{ffffff}%s%s (ID:%d)\n", vipstring, GetPlayerNameEx(i), playerid);
-			count++;
-		}
+		if (!pInfo[i][pVipLevel]) continue;
+
+		format(vipstring, sizeof(vipstring),"{ffffff}%s%s (ID:%d)\n", vipstring, GetPlayerNameEx(i), playerid);
+		count++;
 	}
 	
 	if (!count) return SendClientMessage(playerid, COLOR_GREY, "There are currently no VIP's online.");
@@ -3040,36 +2820,28 @@ CMD:robj(playerid) return RemovePlayerAttachedObject(playerid,1);
 
 CMD:stopanim(playerid) return ClearAnimations(playerid);
 
-CMD:machinegun(playerid)
+CMD:machinegun(playerid) // Modified by Logic_
 {
-	if (pInfo[playerid][pTeam] == TEAM_HUMAN)
-	{
-		 if (pInfo[playerid][pRank] >= 31)
-		 {
-			 if (pInfo[playerid][Minigun] == 0)
-			 {
-				GivePlayerWeapon(playerid, 38, 500);
-				SendClientMessage(playerid,-1,""chat""COL_LGREEN" You spawned a Machine gun! Now blast all those zombies!");
-				pInfo[playerid][Minigun] = 1;
-			 }
-			 else return SendClientMessage(playerid,-1,""chat""COL_LGREEN" {FF0000}You already have spawned a minigun before.");
-		 }
-		 else return SendClientMessage(playerid,-1,""chat""COL_LGREEN" {FF0000}You must have a rank 31 of a Survivor II.");
-	}
-	else return SendClientMessage(playerid,-1,""chat""COL_LGREEN" {FF0000}You must be a Human, in order to spawn a Machine gun.");
+	if (pInfo[playerid][pTeam] != TEAM_HUMAN) return SendClientMessage(playerid,-1,""chat""COL_LGREEN" {FF0000}You must be a Human, in order to spawn a Machine gun.");
+	if (pInfo[playerid][pRank] < 31) return SendClientMessage(playerid,-1,""chat""COL_LGREEN" {FF0000}You must have a rank 31 of a Survivor II.");
+	if (pInfo[playerid][Minigun]) return SendClientMessage(playerid,-1,""chat""COL_LGREEN" {FF0000}You already have spawned a minigun before.");
+	
+	GivePlayerWeapon(playerid, 38, 500);
+	SendClientMessage(playerid, -1, ""chat""COL_LGREEN" You spawned a Machine gun! Now blast all those zombies!");
+	pInfo[playerid][Minigun] = 1;
 	return 1;
 }
 
-CMD:ranks(playerid)
-{
-	new i, str[20], str2[20 * sizeof gRanks + 1];
-	for(i = 0; i < sizeof gRanks; i++)
-	{
-		format(str, sizeof str, "%s\t%d", gRanks[i][E_RANKS_NAME], gRanks[i][E_RANKS_KILLS]);
+CMD:ranks(playerid) {  // Added by Logic_
+
+	new i, str[20], str2[40 + 20 * sizeof gRanks + 1] = "{FFFFFF}Rank Name\t{FFFFFF}Rank Kills\n";
+	
+	for(; i < sizeof gRanks; i++) {
+		format(str, sizeof str, "%s\t%d\n", gRanks[i][E_RANKS_NAME], gRanks[i][E_RANKS_KILLS]);
 		strcat(str2, str);
 	}
 
-	ShowPlayerDialog(playerid, 0 ,DIALOG_STYLE_TABLIST_HEADERS, "Rank list", str2, "Close", "");
+	ShowPlayerDialog(playerid, 0, DIALOG_STYLE_TABLIST_HEADERS, "Rank list", str2, "Close", "");
 	return 1;
 }
 
@@ -3209,8 +2981,7 @@ CMD:cmds(playerid)
 	strcat(cmdstring,"{DC143C}/report{ffffff} - Report a hacker, rulebreaker.\n");
 	strcat(cmdstring,"{DC143C}/pm{ffffff} - Send a private message to player.\n");
 	strcat(cmdstring,"{DC143C}/r{ffffff} - A quick reply to message.\n");
-	strcat(cmdstring,"{DC143C}/blockpm{ffffff} - Block your private messages.\n");
-	strcat(cmdstring,"{DC143C}/unblockpm{ffffff} - It is already obvious.\n");
+	strcat(cmdstring,"{DC143C}/dnd{ffffff} - Toggle 'do not disturb' mode (toggle PM blocking).\n");
 	strcat(cmdstring,"{DC143C}/sharexp{ffffff} - Share your XP to someone.\n");
 	strcat(cmdstring,"{DC143C}/sharecash{ffffff} - Share your Cash to someone.\n");
 	strcat(cmdstring,"{DC143C}/savestats{ffffff} - Save your statistics.\n");
@@ -3224,9 +2995,9 @@ CMD:cmds(playerid)
 	strcat(cmdstring,"{DC143C}/laseron{ffffff} - Enable the laser for your weapon.\n");
 	strcat(cmdstring,"{DC143C}/laseroff{ffffff} - Disable the laser for your weapon.\n");
 	strcat(cmdstring,"{DC143C}/lasercol{ffffff} - Choose a colour for the laser.\n");
-	strcat(cmdstring,"{DC143C}/me{ffffff} - RolePlay action.\n");
-	ShowPlayerDialog(playerid,DIALOG_CMDS,DIALOG_STYLE_MSGBOX,"{DC143C}Server Commands:",cmdstring,"Close","");
-	return 1;
+	strcat(cmdstring,"{DC143C}/me{ffffff} - Roleplay an action.\n");
+	
+	return ShowPlayerDialog(playerid, DIALOG_CMDS, DIALOG_STYLE_MSGBOX, "{DC143C}Server Commands:", cmdstring, "Close", ""), 1;
 }
 
 CMD:radio(playerid)
@@ -3440,7 +3211,7 @@ CMD:dnd(playerid) {
 }
 
 CMD:maps(playerid) {
-	
+
 	new string[2000];
 
 	strcat(string, "All of the server maps are listed here:\nThis includes all the creations of our mappers and other people along with their credits.\n\n\n");
@@ -5265,20 +5036,12 @@ custom SendVipError(playerid,viplevel)
 	return 1;
 }
 
-custom GivePlayerXP(playerid,xp)
-{
-	pInfo[playerid][pXP] += xp;
-	return 1;
-}
-
-custom LoadMap(mapid)
-{
+custom LoadMap(mapid) { // Re-written by Logic_
 	new query[60], DBResult: result;
 	format(query, sizeof query, "SELECT * FROM "TABLE_MAPS" WHERE "FIELD_MAP_ID" = %d", gMaps[mapid]);
 	result = db_query(gSQL, query);
 
-	if (db_num_rows(result))
-	{
+	if (db_num_rows(result)) { 
 		printf("Loading map ID %d.", mapid);
 
 		db_get_field_assoc(result, FIELD_MAP_FS_NAME, Map[FSMapName], sizeof Map[FSMapName]);
@@ -5675,8 +5438,7 @@ custom DefaultTextdraws()
 	return 1;
 }
 
-custom UpdateAliveInfo()
-{
+custom UpdateAliveInfo() { // Modified by Logic_
 	new string[50];
 	format(string, sizeof string, "~r~%d~w~ ZOMBIES ~w~VS~w~ HUMANS ~b~%d", GetTeamPlayersAlive(TEAM_ZOMBIE), GetTeamPlayersAlive(TEAM_HUMAN));
 	
