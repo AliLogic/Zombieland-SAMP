@@ -2,7 +2,7 @@
 	Script licensed to Logic_
 	Copyright 2017-2018
 	Licensed under The Digital Millennium Copyright Act of 1998 (https://www.copyright.gov/legislation/dmca.pdf)
-	Version 1 Build 3
+	Version 1 Build 4
 
 	Formerly known as Zombieland (samp-zombieland.info)
 */
@@ -24,20 +24,21 @@
 #define		chat						"{FFFFFF}»"
 
 #define		function%0(%1)				\
-			forward%0(%1);\
-			public%0(%1)
+			forward %0(%1);\
+			public %0(%1)
 
 #define		custom
 
-#define		NON_IMMUNE 311
-#define		MAX_MAPTIME 250
-#define		MAX_RESTART_TIME 10000
-#define		MAX_MAPUPDATE_TIME 1450
-#define		MAX_SHOW_CP_TIME 1000
-#define		MAX_END_TIME 60000
-#define		MAX_BALANCERUPDATE_TIME 6000
-#define		TIME 180000
-#define		MAX_MAPS 30
+#define		NON_IMMUNE					311
+#define		MAX_MAPTIME					250
+#define		MAX_RESTART_TIME			10000
+#define		MAX_MAPUPDATE_TIME			1450
+#define		MAX_SHOW_CP_TIME			1000
+#define		MAX_END_TIME				60000
+#define		MAX_BALANCERUPDATE_TIME		6000
+#define		TIME						180000
+#define		MAX_MAPS					30
+#define		MAX_BOMBS					20
 
 #define		PRESSED(%0)					\
 			(((newkeys & (%0)) == (%0)) && ((oldkeys & (%0)) != (%0)))
@@ -53,6 +54,9 @@
 
 #define		GivePlayerXP(%0,%1)			\
 			pInfo[%0][pXP] += %1
+
+#define		NotifyPlayer(%0,%1)			\
+			GameTextForPlayer(%0, %1, 3000, 3)
 
 #define		MAX_PASSWORD_LEN			65
 #define		PASSWORD_SALT				"xxxtentacion" // anyways, you should use per-player salts
@@ -224,14 +228,12 @@ enum
 #define COL_LIGHTBLUE      "{00C0FF}"
 #define COL_LGREEN         "{C9FFAB}"
 
-enum E_CLASS
-{
+enum E_CLASS {
 	E_CLASS_NAME[16],
 	E_CLASS_SCORE
 };
 
-enum
-{
+enum {
 	CIVILIAN,
 	MEDIC,
 	TERRORIST,
@@ -246,8 +248,7 @@ enum
 	VIPSCOUT
 };
 
-new const gHumanClass[][E_CLASS] =
-{
+new const gHumanClass[][E_CLASS] = {
 	{"Civilian",		0},
 	{"Medic",			6000},
 	{"Terrorist",		37000},
@@ -262,8 +263,7 @@ new const gHumanClass[][E_CLASS] =
 	{"VIP Scout",		0}
 };
 
-enum
-{
+enum {
 	STANDARDZOMBIE,
 	MUTATEDZOMBIE,
 	HUNTERZOMBIE,
@@ -278,8 +278,8 @@ enum
 	TANKERZOMBIE
 };
 
-new const gZombieClass[][E_CLASS] =
-{
+new const gZombieClass[][E_CLASS] = {
+	
 	{"Standard Zombie",	0},
 	{"Mutated Zombie",	5000},
 	{"Hunter Zombie",	10000},
@@ -294,8 +294,13 @@ new const gZombieClass[][E_CLASS] =
 	{"Tanker Zombie",	330000}
 };
 
-new const gAdminRanks[][] = 
-{
+enum E_BOMB {
+	E_BOMB_OBJECT,
+	E_BOMB_PLAYERID
+};
+new gBomb[MAX_BOMBS][E_BOMB];
+
+new const gAdminRanks[][16] =  {
 	"Player",
 	"Trial Moderator",
 	"Moderator",
@@ -409,6 +414,7 @@ new Map[mapinfo];
 
 enum E_PLAYER_INFO
 {
+	// Stuff that is saved!
 	pID,
 	pName[MAX_PLAYER_NAME],
 	pPassword[65],
@@ -419,6 +425,8 @@ enum E_PLAYER_INFO
 	pDeaths,
 	pRank,
 	
+	// Stuff that isn't saved!
+	pBombs,
 	pRoundZombies,
 	pRoundDeaths,
 	pRoundKills,
@@ -426,7 +434,6 @@ enum E_PLAYER_INFO
 	pAdminLevel,
 	pTime,
 	pAdminDuty,
-	BannedIP[22],
 	pVipLevel,
 	pMapsPlayed,
 	pCoins,
@@ -544,6 +551,7 @@ main()
 function StartMap()
 {
 	ClearChat();
+	ResetBombs();
 
 	foreach(new i : Player)
 	{
@@ -565,6 +573,7 @@ function StartMap()
 		pInfo[i][pVipBoxes] = 9;
 		pInfo[i][pLadders] = 4;
 		pInfo[i][C4] = 2;
+		pInfo[i][pBombs] = 3;
 		pInfo[i][bandages] = 0;
 		pInfo[i][antidotes] = 0;
 		pInfo[i][pDoctorShield] = 1;
@@ -871,7 +880,7 @@ public OneSecondUpdate()
 {
 	UpdateAliveInfo();
 	DoctorShield();
-	//TerroristBomb();
+	TerroristBomb();
 
 	foreach (new i : Player)
 	{
@@ -2205,6 +2214,75 @@ public OnPlayerText(playerid, text[]) { // Updated by Logic_
 	return 0;
 }
 
+custom PlantBomb(playerid) {
+	if (!pInfo[playerid][pBombs]) return NotifyPlayer(playerid, "You don't have any bombs left.");
+
+	new Float: x, Float: y, Float: z, string[40];
+
+	GetPlayerPos(playerid, x, y, z);
+	pInfo[playerid][pBombs] -= 1;
+	ApplyAnimation(playerid, "BOMBER", "BOM_Plant", 4.0, 0, 0, 0, 0, 2000);
+
+	format(string, sizeof(string),""chat" You have %i bombs left.", pInfo[playerid][pBombs]);
+	SendClientMessage(playerid,-1,string);
+
+	new index;
+	if ((index = GetFreeBombID()) == -1) return NotifyPlayer(playerid, "No more bombs can be placed!");
+	
+	gBomb[index][E_BOMB_OBJECT] = CreateObject(1252, x, y, z - 0.25, 0.0, 0.0, 90.0, 500.0);
+	gBomb[index][E_BOMB_PLAYERID] = playerid;
+	return 1;
+}
+
+custom TerroristBomb() {
+	new i, Float: distance, Float: x, Float: y, Float: z;
+
+	for (; i < MAX_BOMBS; i++) {
+		if (gBomb[i][E_BOMB_PLAYERID] == INVALID_PLAYER_ID) continue;
+
+		foreach (new j : Player) {
+			if (pInfo[j][pTeam] != TEAM_ZOMBIE) continue;
+
+			GetPlayerPos(j, x, y, z);
+
+			Streamer_GetDistanceToItem(x, y, z, STREAMER_TYPE_OBJECT, gBomb[i][E_BOMB_OBJECT], distance);
+
+			if (distance <= 1.0) {
+				CreateExplosion(x, y, z, 3, 20.0);
+
+				gBomb[i][E_BOMB_OBJECT] = INVALID_OBJECT_ID;
+				gBomb[i][E_BOMB_PLAYERID] = INVALID_PLAYER_ID;
+
+				/*
+					You can do a lot by tracking the bomber ID and give them rewards for killing them
+				*/
+
+				break;
+			}
+		}
+	}
+	return 1;
+}
+
+custom GetFreeBombID() {
+	for (new i; i < MAX_BOMBS; i++) {
+		if (gBomb[i][E_BOMB_PLAYERID] != INVALID_PLAYER_ID) continue;
+
+		return i;
+	}
+
+	return -1;
+}
+
+custom ResetBombs() {
+	for (new i; i < MAX_BOMBS; i++) {
+		gBomb[i][E_BOMB_PLAYERID] = INVALID_PLAYER_ID;
+		gBomb[i][E_BOMB_OBJECT] = INVALID_OBJECT_ID;
+	}
+
+	return 1;
+}
+
 public OnPlayerKeyStateChange(playerid, newkeys, oldkeys) { // Modified by Logic_
 	
 	if (newkeys == KEY_NO && pInfo[playerid][pTeam] == TEAM_ZOMBIE && pInfo[playerid][pSpawned]) {
@@ -2313,12 +2391,12 @@ public OnPlayerKeyStateChange(playerid, newkeys, oldkeys) { // Modified by Logic
 				}
 
 				case DOCTOR: {
-					new Float:pz, Float:x, Float:y, Float:z;
-					GetPlayerFacingAngle(playerid, pz);
-					GetPlayerPos(playerid, Float:x, Float:y, Float:z);
-
 					if (pInfo[playerid][pDoctorShield] >= 1)
 					{
+						new Float:pz, Float:x, Float:y, Float:z;
+						GetPlayerFacingAngle(playerid, pz);
+						GetPlayerPos(playerid, Float:x, Float:y, Float:z);
+
 						new string[128];
 						pInfo[playerid][pDoctorShield] -= 1;
 						GetXYInFrontOfPlayer(playerid, Float:x,Float:y, 1.0);
@@ -2328,6 +2406,10 @@ public OnPlayerKeyStateChange(playerid, newkeys, oldkeys) { // Modified by Logic
 						PlayerPlaySound(playerid,1057,0.0,0.0,0.0);
 					}
 					else return SendClientMessage(playerid,-1,""chat" You ran out of shields!");
+				}
+
+				case TERRORIST: {
+					PlantBomb(playerid);
 				}
 
 				case MEDIC: {
