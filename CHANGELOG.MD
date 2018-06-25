@@ -46,3 +46,9 @@
 ### VERSION 1 BUILD 3
 22. Heavily optimised and organised OnPlayerKeyStateChange function.
 23. Modified GivePlayerXP function
+
+### VERSION 1 BUILD 4
+24. Added new terrorist bomb system
+25. Added new doctor shield system
+26. Patched an issue with terrorist bomb system
+27. Added an array that stores the map name, can be useful for '/maps' command.
