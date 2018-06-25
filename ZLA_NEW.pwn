@@ -39,6 +39,7 @@
 #define		TIME						180000
 #define		MAX_MAPS					30
 #define		MAX_BOMBS					20
+#define		MAX_SHIELDS					10
 
 #define		PRESSED(%0)					\
 			(((newkeys & (%0)) == (%0)) && ((oldkeys & (%0)) != (%0)))
@@ -62,7 +63,7 @@
 #define		PASSWORD_SALT				"xxxtentacion" // anyways, you should use per-player salts
 
 #define		MAX_REASON_LEN				20 // Maximum ban reason length
-#define		MAX_MAP_NAME_LEN			40 // Maximum map name
+#define		MAX_MAP_NAME_LEN			30 // Maximum map name
 
 #define		TABLE_BANS					"`Bans`"
 #define		FIELD_BAN_ID				"ID"
@@ -86,6 +87,10 @@
 #define		FIELD_TIME					"Time"
 #define		FIELD_MAPS					"Maps"
 #define		FIELD_COINS					"Coins"
+#define		FIELD_KICKBACK				"Kickback" // New additions in Build 4
+#define		FIELD_DMGSHOTGUN			"DamageShotgun" // New additions in Build 4
+#define		FIELD_DMGDEAGLE				"DamageDeagle" // New additions in Build 4
+#define		FIELD_DMGMP5				"DamageMP5" // New additions in Build 4
 
 #define		TABLE_MAPS					"`Maps`"
 #define		FIELD_MAP_ID				"ID"
@@ -118,6 +123,8 @@
 #define		FIELD_MAP_TIME				"Time"
 
 #define		PLAYER_MUTE_TIME_MINUTES	(2)
+
+#define		BODY_PART_HEAD				9
 
 enum
 {
@@ -300,6 +307,12 @@ enum E_BOMB {
 };
 new gBomb[MAX_BOMBS][E_BOMB];
 
+enum E_SHIELD {
+	E_SHIELD_PLAYERID,
+	E_SHIELD_OBJECT
+};
+new gShields[MAX_SHIELDS][E_SHIELD];
+
 new const gAdminRanks[][16] =  {
 	"Player",
 	"Trial Moderator",
@@ -317,6 +330,7 @@ new
 	gMap_Timer,
 	gBalance_Timer,
 	gMaps[MAX_MAPS],
+	gMapNames[MAX_MAPS][MAX_MAP_NAME_LEN],
 	gMapID,
 	gPlayersCount,
 	gGateObject,
@@ -336,9 +350,7 @@ new Text:Textdraw11;
 new Text:Textdraw12;
 // Variables
 new playersAliveCount;
-new DocShield;
 
-new c4Obj[MAX_PLAYERS];
 new smokegas[MAX_PLAYERS];
 
 new Float:SpecX[MAX_PLAYERS], Float:SpecY[MAX_PLAYERS], Float:SpecZ[MAX_PLAYERS], vWorld[MAX_PLAYERS], Inter[MAX_PLAYERS];
@@ -369,8 +381,8 @@ new Text:myrank[MAX_PLAYERS];
 new Text:ServerIntroOne[MAX_PLAYERS];
 new Text:ServerIntroTwo[MAX_PLAYERS];
 
-enum mapinfo
-{
+enum E_MAP_INFO {
+
 	MapName[MAX_MAP_NAME_LEN],
 	FSMapName[MAX_MAP_NAME_LEN],
 	
@@ -410,10 +422,10 @@ enum mapinfo
 	IsStarted,
 	XPType
 };
-new Map[mapinfo];
+new Map[E_MAP_INFO];
 
-enum E_PLAYER_INFO
-{
+enum E_PLAYER_INFO {
+
 	// Stuff that is saved!
 	pID,
 	pName[MAX_PLAYER_NAME],
@@ -424,32 +436,36 @@ enum E_PLAYER_INFO
 	pHeads,
 	pDeaths,
 	pRank,
-	
-	// Stuff that isn't saved!
-	pBombs,
-	pRoundZombies,
-	pRoundDeaths,
-	pRoundKills,
-	pEvac,
 	pAdminLevel,
-	pTime,
-	pAdminDuty,
 	pVipLevel,
 	pMapsPlayed,
 	pCoins,
+	
+	// Stuff that isn't saved!
 	pLogged,
+	
+	// - Class related content
+	pBombs,
+	
+	// - Round related content
+	pRoundZombies,
+	pRoundDeaths,
+	pRoundKills,
+	pTeam,
+	pClass,
+	
+	pEvac,
+	pTime, // Unused for now
+	pAdminDuty,
 	pWarnings,
 	pPM,
 	Last,
-	IsPlayerMuted,
+	Muted,
 	Killstreak,
-	pTeam,
-	pClass,
 	IsPlayerInfected,
 	IsPlayerInfectedTimer,
 	Boxes,
 	BoxesAdvanced,
-	C4,
 	bandages,
 	antidotes,
 	pVipKickBack,
@@ -541,17 +557,15 @@ new const gRanks[][E_RANKS] =
 
 forward Float:GetDistanceBetweenPlayers(p1,p2);
 
-main()
-{
-	print("\n----------------------------------");
-	print(""NAME"");
-	print("----------------------------------\n");
+main() {
+	print("[main] "NAME"");
 }
 
 function StartMap()
 {
 	ClearChat();
 	ResetBombs();
+	ResetShields();
 
 	foreach(new i : Player)
 	{
@@ -572,7 +586,6 @@ function StartMap()
 		pInfo[i][BoxesAdvanced] = 7;
 		pInfo[i][pVipBoxes] = 9;
 		pInfo[i][pLadders] = 4;
-		pInfo[i][C4] = 2;
 		pInfo[i][pBombs] = 3;
 		pInfo[i][bandages] = 0;
 		pInfo[i][antidotes] = 0;
@@ -581,7 +594,6 @@ function StartMap()
 		pInfo[i][Killstreak] = 0;
 		TextDrawHideForPlayer(i, ServerIntroOne[i]);
 		TextDrawHideForPlayer(i, ServerIntroTwo[i]);
-		DestroyObject(DocShield);
 		TogglePlayerControllable(i,1);
 	}
 
@@ -817,13 +829,10 @@ public OnPlayerEnterCheckpoint(playerid)
 	return 1;
 }
 
-public OnPlayerPickUpDynamicPickup(playerid, pickupid)
-{
-	return 1;
-}
+public OnGameModeInit() {
 
-public OnGameModeInit()
-{
+	print("[OnGameModeInit] Checking database.");
+	
 	if ((gSQL = db_open(DB_PATH)) == DB: 0)
 	{
 		return print("SQLite: Connection to the database failed.");
@@ -831,13 +840,16 @@ public OnGameModeInit()
 	
 	print("SQLite: Connected to the database.");
 
+	print("[OnGameModeInit] Creating database.");
+
 	db_free_result(db_query(gSQL, "CREATE TABLE IF NOT EXISTS "#TABLE_BANS" \
 		("FIELD_BAN_ID" INTEGER PRIMARY KEY AUTOINCREMENT, "FIELD_BANNAME" STRING, "FIELD_BANREASON" STRING)"));
 
 	db_free_result(db_query(gSQL, "CREATE TABLE IF NOT EXISTS "TABLE_USERS" \
 		("FIELD_ID" INTEGER PRIMARY KEY AUTOINCREMENT, "FIELD_NAME" STRING, "FIELD_PASSWORD" STRING, "FIELD_IP" STRING, "FIELD_CASH" INTEGER DEFAULT '0', "FIELD_XP" INTEGER DEFAULT '0', \
 		"FIELD_KILLS" INTEGER DEFAULT '0', "FIELD_DEATHS" INTEGER DEFAULT '0', "FIELD_HEADS" INTEGER DEFAULT '0', "FIELD_EVAC" INTEGER DEFAULT '0', "FIELD_RANK" INTEGER DEFAULT '0', "FIELD_ADMIN" INTEGER DEFAULT '0', \
-		"FIELD_VIP" INTEGER DEFAULT '0', "FIELD_TIME" INTEGER DEFAULT '0', "FIELD_MAPS" INTEGER DEFAULT '0', "FIELD_COINS" INTEGER DEFAULT '0')"));
+		"FIELD_VIP" INTEGER DEFAULT '0', "FIELD_TIME" INTEGER DEFAULT '0', "FIELD_MAPS" INTEGER DEFAULT '0', "FIELD_COINS" INTEGER DEFAULT '0', "FIELD_KICKBACK" INTEGER DEFAULT '0', "FIELD_DMGDEAGLE" INTEGER DEFAULT '0'\
+		"FIELD_DMGSHOTGUN" INTEGER DEFAULT '0', "FIELD_DMGMP5" INTEGER DEFAULT '0')"));
 
 	db_free_result(db_query(gSQL, "CREATE TABLE IF NOT EXISTS "TABLE_MAPS" \
 		("FIELD_MAP_ID" INTEGER PRIMARY KEY AUTOINCREMENT, "FIELD_MAP_FS_NAME" STRING, "FIELD_MAP_NAME" STRING, "FIELD_MAP_HUMAN_SPAWN_X" FLOAT, "FIELD_MAP_HUMAN_SPAWN_Y" FLOAT, "FIELD_MAP_HUMAN_SPAWN_Z" FLOAT, \
@@ -846,21 +858,29 @@ public OnGameModeInit()
 		"FIELD_MAP_CP_X" REAL, "FIELD_MAP_CP_Y" REAL, "FIELD_MAP_CP_Z" REAL, "FIELD_MAP_MOVE_GATE" INTEGER, "FIELD_MAP_GATE_ID" INTEGER, "FIELD_MAP_WATER" INTEGER, "FIELD_MAP_EVAC_TYPE" INTEGER, \
 		"FIELD_MAP_WEATHER" INTEGER, "FIELD_MAP_TIME" INTEGER)"));
 
-	//ConvertMaps();
+	print("[OnGameModeInit] Loading maps.");
 	LoadMaps();
 
+	print("[OnGameModeInit] Creating textdraws.");
 	LoadTextdraws();
+
+	print("[OnGameModeInit] Initiating server information.");
 	SetGameModeText("Zombieland v0.1 TDM");
 	SendRconCommand("hostname "NAME"");
 	SendRconCommand("weburl "SITE"");
 
-	AddPlayerClass(162, -342.24377, 2217.76343, 42.58860,   90.00000, 0, 0, 0, 0, 0, 0);
-	CreateObject(19124, -328.05219, 2233.07642, 42.33670,   0.00000, 0.00000, 0.00000);
-	CreateObject(19124, -327.40564, 2212.46313, 42.33670,   0.00000, 0.00000, 0.00000);
+	print("[OnGameModeInit] Initiating general stuff.");
 	AllowInteriorWeapons(1);
 	DisableInteriorEnterExits();
 
-	SetTimer("RandomMessages",	30000,	true);
+	print("[OnGameModeInit] Adding class.");
+	AddPlayerClass(162, -342.24377, 2217.76343, 42.58860,   90.00000, 0, 0, 0, 0, 0, 0);
+
+	CreateObject(19124, -328.05219, 2233.07642, 42.33670,   0.00000, 0.00000, 0.00000);
+	CreateObject(19124, -327.40564, 2212.46313, 42.33670,   0.00000, 0.00000, 0.00000);
+	
+	print("[OnGameModeInit] Initiating timers.");
+	SetTimer("RandomMessages",	45000,	true);
 	SetTimer("AntiCheat",		3000,	true);
 	SetTimer("OneSecondUpdate",	1000,	true);
 
@@ -876,65 +896,20 @@ public OnGameModeInit()
 }
 
 forward OneSecondUpdate();
-public OneSecondUpdate()
-{
+public OneSecondUpdate() {
+
 	UpdateAliveInfo();
 	DoctorShield();
-	TerroristBomb();
+	TerroristBomb(); // Completely new terrorist bomb system!
 
-	foreach (new i : Player)
-	{
+	foreach (new i : Player) {
 		UpdateXPTextdraw(i);
 		UpdateTokensTextdraw(i);
 		UpdateRanksTextdraw(i);
 	}
+	
 	return 1;
 }
-
-custom DoctorShield()
-{
-	new Float:X,Float:Y,Float:Z,Float:hp,str[128];
-	GetObjectPos(DocShield,X,Y,Z);
-	foreach (new i : Player)
-	{
-		if(IsPlayerInRangeOfPoint(i,4.5,X,Y,Z))
-		{
-			if(pInfo[i][pTeam] == TEAM_HUMAN)
-			{
-				GetPlayerHealth(i,hp);
-				if(hp < 80)
-				{
-					SetPlayerHealth(i,hp+3.5);
-					format(str,sizeof str,"~n~~n~~n~~n~~g~GETTING HEALED BY DOCTOR SHIELD~w~ (NEW HP: %.2f HP)",hp);
-					GameTextForPlayer(i,str,1000,5);
-				}
-				else
-				{
-					GameTextForPlayer(i,"~n~~n~~n~~n~~r~YOU HAVE ENOUGH HP TO SURVIVE",1000,5);
-				}
-			}
-		}
-	}
-	return 1;
-}
-
-/*custom TerroristBomb()
-{
-	new Float:X,Float:Y,Float:Z;
-	GetObjectPos(Bomb,X,Y,Z);
-	foreach (new i : Player)
-	{
-		if(IsPlayerInRangeOfPoint(i,2.5,X,Y,Z))
-		{
-			if(pInfo[i][pTeam] == TEAM_ZOMBIE)
-			{
-				CreateExplosion(X,Y,Z,3,40.0);
-				DestroyObject(Bomb);
-			}
-		}
-	}
-	return 1;
-}*/
 
 custom UpdateKillStatsTD(playerid)
 {	
@@ -944,90 +919,24 @@ custom UpdateKillStatsTD(playerid)
 	return 1;
 }
 
-/*ConvertMaps()
-{
-	new query[1000];
-	for(new i; i < 27; i++)
-	{
-		printf("Attempting %d", i);
+LoadMaps() {
+	new DBResult: result = db_query(gSQL, "SELECT "FIELD_MAP_ID", "FIELD_MAP_NAME" FROM "TABLE_MAPS""), maps = db_num_rows(result);
 
-		new Map_file[64];
-		format(Map_file, sizeof(Map_file), "/ZL/Maps/%d.ini", i);
-		INI_ParseFile(Map_file, "load_Map_%s", .bExtra = true, .extra = i);
+	if (!maps) {
 
-		format(query, sizeof query, "INSERT INTO "TABLE_MAPS" \
-			("FIELD_MAP_FS_NAME", "FIELD_MAP_NAME", "FIELD_MAP_HUMAN_SPAWN_X", "FIELD_MAP_HUMAN_SPAWN_Y", "FIELD_MAP_HUMAN_SPAWN_Z", \
-			"FIELD_MAP_HUMAN_SPAWN2_X", "FIELD_MAP_HUMAN_SPAWN2_Y", "FIELD_MAP_HUMAN_SPAWN2_Z", "FIELD_MAP_ZOMBIE_SPAWN_X", "FIELD_MAP_ZOMBIE_SPAWN_Y", "FIELD_MAP_ZOMBIE_SPAWN_Z", \
-			"FIELD_MAP_INTERIOR", "FIELD_MAP_GATE_X", "FIELD_MAP_GATE_Y", "FIELD_MAP_GATE_Z", "FIELD_MAP_GATE2_X", "FIELD_MAP_GATE2_Y", "FIELD_MAP_GATE2_Z", \
-			"FIELD_MAP_CP_X", "FIELD_MAP_CP_Y", "FIELD_MAP_CP_Z", "FIELD_MAP_MOVE_GATE", "FIELD_MAP_GATE_ID", "FIELD_MAP_WATER", "FIELD_MAP_EVAC_TYPE", \
-			"FIELD_MAP_WEATHER", "FIELD_MAP_TIME") \
-			VALUES('%s', '%s', '%f', '%f', '%f', \
-			'%f', '%f', '%f', '%f', '%f', '%f', \
-			'%d', '%f', '%f', '%f', '%f', '%f', '%f', \
-			'%f', '%f', '%f', '%d', '%d', '%d', '%d', \
-			'%d', '%d')",
-			Map[FSMapName], Map[MapName], Map[HumanSpawnX], Map[HumanSpawnY], Map[HumanSpawnZ],
-			Map[HumanSpawn2X], Map[HumanSpawn2Y], Map[HumanSpawn2Z], Map[ZombieSpawnX], Map[ZombieSpawnY], Map[ZombieSpawnZ],
-			Map[Interior], Map[GateX], Map[GateY], Map[GateZ], Map[GaterX], Map[GaterY], Map[GaterZ],
-			Map[CPx], Map[CPy], Map[CPz], Map[MoveGate], Map[GateID], Map[AllowWater], Map[EvacType],
-			Map[Weather], Map[Time]);
-		db_free_result(db_query(gSQL, query));
-		//print(query);
-	}
-}
-
-forward load_Map_basic(Mapid, name[], value[]);
-public load_Map_basic(Mapid, name[], value[])
-{
-	if (strcmp(name, "FSMapName", true) == 0) strmid(Map[FSMapName], value, false, strlen(value), 128);
-	if (strcmp(name, "MapName", true) == 0) strmid(Map[MapName], value, false, strlen(value), 128);
-
-	if (strcmp(name, "HumanSpawnX", true) == 0) Map[HumanSpawnX] = floatstr(value);
-	if (strcmp(name, "HumanSpawnY", true) == 0) Map[HumanSpawnY] = floatstr(value);
-	if (strcmp(name, "HumanSpawnZ", true) == 0) Map[HumanSpawnZ] = floatstr(value);
-	if (strcmp(name, "HumanSpawn2X", true) == 0) Map[HumanSpawn2X] = floatstr(value);
-	if (strcmp(name, "HumanSpawn2Y", true) == 0) Map[HumanSpawn2Y] = floatstr(value);
-	if (strcmp(name, "HumanSpawn2Z", true) == 0) Map[HumanSpawn2Z] = floatstr(value);
-	if (strcmp(name, "ZombieSpawnX", true) == 0) Map[ZombieSpawnX] = floatstr(value);
-	if (strcmp(name, "ZombieSpawnY", true) == 0) Map[ZombieSpawnY] = floatstr(value);
-	if (strcmp(name, "ZombieSpawnZ", true) == 0) Map[ZombieSpawnZ] = floatstr(value);
-	if (strcmp(name, "Interior", true) == 0) Map[Interior] = strval(value);
-	if (strcmp(name, "GateX", true) == 0) Map[GateX] = floatstr(value);
-	if (strcmp(name, "GateY", true) == 0) Map[GateY] = floatstr(value);
-	if (strcmp(name, "GateZ", true) == 0) Map[GateZ] = floatstr(value);
-	if (strcmp(name, "CPx", true) == 0) Map[CPx] = floatstr(value);
-	if (strcmp(name, "CPy", true) == 0) Map[CPy] = floatstr(value);
-	if (strcmp(name, "CPz", true) == 0) Map[CPz] = floatstr(value);
-	if (strcmp(name, "GaterX", true) == 0) Map[GaterX] = floatstr(value);
-	if (strcmp(name, "GaterY", true) == 0) Map[GaterY] = floatstr(value);
-	if (strcmp(name, "GaterZ", true) == 0) Map[GaterZ] = floatstr(value);
-	if (strcmp(name, "MoveGate", true) == 0) Map[MoveGate] = strval(value);
-	if (strcmp(name, "GateID", true) == 0) Map[GateID] = strval(value);
-	if (strcmp(name, "AllowWater", true) == 0) Map[AllowWater] = strval(value);
-	if (strcmp(name, "EvacType", true) == 0) Map[EvacType] = strval(value);
-	if (strcmp(name, "Weather", true) == 0) Map[Weather] = strval(value);
-	if (strcmp(name, "Time", true) == 0) Map[Time] = strval(value);
-	return 1;
-}*/
-
-LoadMaps()
-{
-	new DBResult: result = db_query(gSQL, "SELECT "FIELD_MAP_ID" FROM "TABLE_MAPS""), maps = db_num_rows(result);
-
-	if (!maps)
-	{
 		print("_____________________________________________________________");
 		print("Maps: The server has detected there are no map files\n\
 			currently installed. The server has been set to\n\
-			automatically shut down in 10 seconds.");
+			automatically shut down in 5 seconds.");
 		print("_____________________________________________________________");
 
-		return SetTimer("No_Maps", 10000, false);
+		return SetTimer("No_Maps", 5000, false);
 	}
 
-	for(new i; i < maps; i++)
-	{
+	for(new i; i < maps; i++) {
+
 		gMaps[i] = db_get_field_assoc_int(result, FIELD_MAP_ID);
+		db_get_field_assoc(result, FIELD_MAP_NAME, gMapNames[i], MAX_MAP_NAME_LEN);
 		db_next_row(result);
 	}
 
@@ -1035,8 +944,8 @@ LoadMaps()
 	return 1;
 }
 
-public OnGameModeExit()
-{
+public OnGameModeExit() {
+
 	TextDrawHideForAll(TimeLeft);
 	TextDrawDestroy(TimeLeft);
 	TextDrawHideForAll(UntilRescue);
@@ -1395,7 +1304,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 			if (!response)
 			{
 				SendClientMessage(playerid, -1, "You must log in to play at "NAME);
-				KickPlayer(playerid);
+				return KickPlayer(playerid), 1;
 			}
 			
 			new buf[65];
@@ -1467,22 +1376,19 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 			return 1;
 		}
 
-		case DIALOG_CLASS_3:
-		{
-			if (!response)
-			{
+		case DIALOG_CLASS_3: {
+			if (!response) {
 				return ShowPlayerDialog(playerid, DIALOG_ZOMBIE_CLASSES, DIALOG_STYLE_LIST, "ZOMBIE SPAWN MENU", "Classes", "Select", "Back");
 			}
 
-			if (pInfo[playerid][pXP] < gZombieClass[listitem][E_CLASS_SCORE])
-			{
+			if (pInfo[playerid][pXP] < gZombieClass[listitem][E_CLASS_SCORE]) {
 				return SendXPError(playerid, gZombieClass[listitem][E_CLASS_SCORE]);
 			}
 
 			pInfo[playerid][pClass] = listitem;
 			setClass(playerid);
-			switch (pInfo[playerid][pClass])
-			{
+			
+			switch (listitem) {
 				case 1: SendClientMessage(playerid,-1,""chat""COL_WHITE" {FFFF33}You have selected a Mutated Zombie. Press 'LALT' to infect all humans around you.");
 				case 2: SendClientMessage(playerid,-1,""chat""COL_WHITE" {FFFF33}You have selected a Hunter Zombie. Press 'LSHIFT' to do a high jump.");
 				case 3: SendClientMessage(playerid,-1,""chat""COL_WHITE" {FFFF33}You have selected a Stomper Zombie. Press 'LALT' to throw humans away around you.");
@@ -1499,26 +1405,27 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 			return 1;
 		}
 
-		case DIALOG_VIP:
-		{
-			if (response)
+		case DIALOG_VIP: {
+
+			if (!response) return 1;
+			
+			switch (listitem)
 			{
-				switch (listitem)
-				{
-					case 0: if (pInfo[playerid][pVipLevel] >= 1) SendPlayerMaxAmmo(playerid),SendClientMessage(playerid,-1,""chat""COL_PINK" {B266FF}You have all your weapons max'ed ammo."); else { SendVipError(playerid,1); }
-					case 1: if (pInfo[playerid][pVipLevel] >= 1) GivePlayerWeapon(playerid,31,150),GivePlayerWeapon(playerid,24,100),GivePlayerWeapon(playerid,25,600); else { SendVipError(playerid,1); }
-					case 2: if (pInfo[playerid][pVipLevel] >= 1) SetPlayerAttachedObject(playerid,0,19142,1,0.028000,0.034000,0.000000,0.000000,0.000000,0.000000,1.063000,1.191999,1.285999); else { SendVipError(playerid,2); }
-					case 3: if (pInfo[playerid][pVipLevel] >= 2) ShowPlayerDialog(playerid,DIALOG_VIP_CLASS,DIALOG_STYLE_LIST,"VIP Classes {ffffff}({0080FF}Human{ffffff})","Engineer\nMedic\nScout","Select","Close"); else { SendVipError(playerid,3); }
-					case 4: if (pInfo[playerid][pVipLevel] >= 2) pInfo[playerid][pVipFlash] = 1,SendClientMessage(playerid,-1,""chat""COL_LGREEN" {B266FF}Your name is now flashing."); else { SendVipError(playerid,4); }
-					case 5: if (pInfo[playerid][pVipLevel] >= 2) pInfo[playerid][pVipFlash] = 0,SendClientMessage(playerid,-1,""chat""COL_LGREEN" {B266FF}Your name has stopped flashing."); else { SendVipError(playerid,4); }
-					case 6: if (pInfo[playerid][pVipLevel] >= 3) pInfo[playerid][pVipKickBack] = 1,SendClientMessage(playerid,-1,""chat""COL_LGREEN" {B266FF}You have enabled kick back!"); else { SendVipError(playerid,3); }
-					case 7: if (pInfo[playerid][pVipLevel] >= 3) pInfo[playerid][pVipKickBack] = 0,SendClientMessage(playerid,-1,""chat""COL_LGREEN" {B266FF}You have disabled kick back!"); else { SendVipError(playerid,3); }
-				}
+				case 0: if (pInfo[playerid][pVipLevel] >= 1) SendPlayerMaxAmmo(playerid),SendClientMessage(playerid,-1,""chat""COL_PINK" {B266FF}You have all your weapons max'ed ammo."); else { SendVipError(playerid,1); }
+				case 1: if (pInfo[playerid][pVipLevel] >= 1) GivePlayerWeapon(playerid,31,150),GivePlayerWeapon(playerid,24,100),GivePlayerWeapon(playerid,25,600); else { SendVipError(playerid,1); }
+				case 2: if (pInfo[playerid][pVipLevel] >= 1) SetPlayerAttachedObject(playerid,0,19142,1,0.028000,0.034000,0.000000,0.000000,0.000000,0.000000,1.063000,1.191999,1.285999); else { SendVipError(playerid,2); }
+				case 3: if (pInfo[playerid][pVipLevel] >= 2) ShowPlayerDialog(playerid,DIALOG_VIP_CLASS,DIALOG_STYLE_LIST,"VIP Classes {ffffff}({0080FF}Human{ffffff})","Engineer\nMedic\nScout","Select","Close"); else { SendVipError(playerid,3); }
+				case 4: if (pInfo[playerid][pVipLevel] >= 2) pInfo[playerid][pVipFlash] = 1,SendClientMessage(playerid,-1,""chat""COL_LGREEN" {B266FF}Your name is now flashing."); else { SendVipError(playerid,4); }
+				case 5: if (pInfo[playerid][pVipLevel] >= 2) pInfo[playerid][pVipFlash] = 0,SendClientMessage(playerid,-1,""chat""COL_LGREEN" {B266FF}Your name has stopped flashing."); else { SendVipError(playerid,4); }
+				case 6: if (pInfo[playerid][pVipLevel] >= 3) pInfo[playerid][pVipKickBack] = 1,SendClientMessage(playerid,-1,""chat""COL_LGREEN" {B266FF}You have enabled kick back!"); else { SendVipError(playerid,3); }
+				case 7: if (pInfo[playerid][pVipLevel] >= 3) pInfo[playerid][pVipKickBack] = 0,SendClientMessage(playerid,-1,""chat""COL_LGREEN" {B266FF}You have disabled kick back!"); else { SendVipError(playerid,3); }
 			}
+
+			return 1;
 		}
 
-		case DIALOG_ZOMBIE_CLASSES:
-		{
+		case DIALOG_ZOMBIE_CLASSES: {
+
 			if (!response) return 1;
 
 			switch (listitem)
@@ -1696,127 +1603,125 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 		case DIALOG_SKINS:
 		{
 			if ( !response ) return ShowPlayerDialog(playerid, DIALOG_WEAPONS_SHOP, DIALOG_STYLE_LIST, "{FFFFFF}SHOP", "Weapons\nSkins\nClasses\nToken Shop\nPerks", "Select", "Close");
-			if (response)
+			
+			switch (listitem)
 			{
-				switch (listitem)
+				case 0: // Andre
 				{
-					case 0: // Andre
-					{
-					if (GetPlayerMoney(playerid) < 50)
-					return SendClientMessage(playerid, 0x33FF00AA, "You don't have enough cash to buy this Skin.");
-					GivePlayerMoney(playerid, -50);
-					pInfo[playerid][pCash] -= 50;
-					SetPlayerSkin(playerid, 3);
-					return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
-					}
-					case 1: // Barry "Big Bear" Thorne [Big]
-					{
-					if (GetPlayerMoney(playerid) < 75)
-					return SendClientMessage(playerid, 0x00FFFFAA, "You don't have enough cash to buy this Skin.");
-					GivePlayerMoney(playerid, -75);
-					pInfo[playerid][pCash] -= 75;
-					SetPlayerSkin(playerid, 5);
-					return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
-					}
-					case 2: // The Truth
-					{
-					if (GetPlayerMoney(playerid) < 65)
-					return SendClientMessage(playerid, 0x6600FFAA, "You don't have enough cash to buy this Skin.");
-					GivePlayerMoney(playerid, -65);
-					pInfo[playerid][pCash] -= 65;
-					SetPlayerSkin(playerid, 1);
-					return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
-					}
-					case 3: // Homeless
-					{
-					if (GetPlayerMoney(playerid) < 30)
-					return SendClientMessage(playerid, 0x99FF00AA, "You don't have enough cash to buy this Skin.");
-					GivePlayerMoney(playerid, -30);
-					pInfo[playerid][pCash] -= 30;
-					SetPlayerSkin(playerid, 78);
-					return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
-					}
-					case 4: // Backpacker
-					{
-					if (GetPlayerMoney(playerid) < 100)
-					return SendClientMessage(playerid, 0x999999AA, "You don't have enough cash to buy this Skin.");
-					GivePlayerMoney(playerid, -100);
-					pInfo[playerid][pCash] -= 100;
-					SetPlayerSkin(playerid, 26);
-					return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
-					}
-					case 5: // The Russian Mafia
-					{
-					if (GetPlayerMoney(playerid) < 80)
-					return SendClientMessage(playerid, 0xCC0000AA, "You don't have enough cash to buy this Skin.");
-					GivePlayerMoney(playerid, -80);
-					pInfo[playerid][pCash] -= 80;
-					SetPlayerSkin(playerid, 112);
-					return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
-					}
-					case 6: // Johhny Sindacco
-					{
-					if (GetPlayerMoney(playerid) < 50)
-					return SendClientMessage(playerid, 0xFF00FFAA, "You don't have enough cash to buy this Skin.");
-					GivePlayerMoney(playerid, -50);
-					pInfo[playerid][pCash] -= 50;
-					SetPlayerSkin(playerid, 119);
-					return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
-					}
-					case 7: // Farm Inhabitant
-					{
-					if (GetPlayerMoney(playerid) < 500)
-					return SendClientMessage(playerid, 0xCCFF00AA, "You don't have enough cash to buy this Skin.");
-					GivePlayerMoney(playerid, -500);
-					pInfo[playerid][pCash] -= 500;
-					SetPlayerSkin(playerid, 128);
-					return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
-					}
-					case 8: // Big Smoke Armored
-					{
-					if (GetPlayerMoney(playerid) < 75)
-					return SendClientMessage(playerid, 0xFFFFFFAA, "You don't have enough cash to buy this Skin.");
-					GivePlayerMoney(playerid, -75);
-					pInfo[playerid][pCash] -= 75;
-					SetPlayerSkin(playerid, 149);
-					return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
-					}
-					case 9: // Black MIB agent
-					{
-					if (GetPlayerMoney(playerid) < 100)
-					return SendClientMessage(playerid, 0xFFFFFFAA, "You don't have enough cash to buy this Skin.");
-					GivePlayerMoney(playerid, -100);
-					pInfo[playerid][pCash] -= 100;
-					SetPlayerSkin(playerid, 166);
-					return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
-					}
-					case 10: // Jeffery "OG Loc" Martin/Cross
-					{
-					if (GetPlayerMoney(playerid) < 90)
-					return SendClientMessage(playerid, 0xFFFFFFAA, "You don't have enough cash to buy this Skin.");
-					GivePlayerMoney(playerid, -90);
-					pInfo[playerid][pCash] -= 90;
-					SetPlayerSkin(playerid, 293);
-					return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
-					}
-					case 11: // Claude Speed
-					{
-					if (GetPlayerMoney(playerid) < 150)
-					return SendClientMessage(playerid, 0xFFFFFFAA, "You don't have enough cash to buy this Skin.");
-					GivePlayerMoney(playerid, -150);
-					pInfo[playerid][pCash] -= 150;
-					SetPlayerSkin(playerid, 299);
-					return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
-					}
-					case 12: // Michael Toreno
-					{
-					if (GetPlayerMoney(playerid) < 200)
-					return SendClientMessage(playerid, 0xFFFFFFAA, "You don't have enough cash to buy this Skin.");
-					GivePlayerMoney(playerid, -200);
-					pInfo[playerid][pCash] -= 200;
-					SetPlayerSkin(playerid, 295);
-					return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
-					}
+				if (GetPlayerMoney(playerid) < 50)
+				return SendClientMessage(playerid, 0x33FF00AA, "You don't have enough cash to buy this Skin.");
+				GivePlayerMoney(playerid, -50);
+				pInfo[playerid][pCash] -= 50;
+				SetPlayerSkin(playerid, 3);
+				return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
+				}
+				case 1: // Barry "Big Bear" Thorne [Big]
+				{
+				if (GetPlayerMoney(playerid) < 75)
+				return SendClientMessage(playerid, 0x00FFFFAA, "You don't have enough cash to buy this Skin.");
+				GivePlayerMoney(playerid, -75);
+				pInfo[playerid][pCash] -= 75;
+				SetPlayerSkin(playerid, 5);
+				return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
+				}
+				case 2: // The Truth
+				{
+				if (GetPlayerMoney(playerid) < 65)
+				return SendClientMessage(playerid, 0x6600FFAA, "You don't have enough cash to buy this Skin.");
+				GivePlayerMoney(playerid, -65);
+				pInfo[playerid][pCash] -= 65;
+				SetPlayerSkin(playerid, 1);
+				return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
+				}
+				case 3: // Homeless
+				{
+				if (GetPlayerMoney(playerid) < 30)
+				return SendClientMessage(playerid, 0x99FF00AA, "You don't have enough cash to buy this Skin.");
+				GivePlayerMoney(playerid, -30);
+				pInfo[playerid][pCash] -= 30;
+				SetPlayerSkin(playerid, 78);
+				return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
+				}
+				case 4: // Backpacker
+				{
+				if (GetPlayerMoney(playerid) < 100)
+				return SendClientMessage(playerid, 0x999999AA, "You don't have enough cash to buy this Skin.");
+				GivePlayerMoney(playerid, -100);
+				pInfo[playerid][pCash] -= 100;
+				SetPlayerSkin(playerid, 26);
+				return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
+				}
+				case 5: // The Russian Mafia
+				{
+				if (GetPlayerMoney(playerid) < 80)
+				return SendClientMessage(playerid, 0xCC0000AA, "You don't have enough cash to buy this Skin.");
+				GivePlayerMoney(playerid, -80);
+				pInfo[playerid][pCash] -= 80;
+				SetPlayerSkin(playerid, 112);
+				return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
+				}
+				case 6: // Johhny Sindacco
+				{
+				if (GetPlayerMoney(playerid) < 50)
+				return SendClientMessage(playerid, 0xFF00FFAA, "You don't have enough cash to buy this Skin.");
+				GivePlayerMoney(playerid, -50);
+				pInfo[playerid][pCash] -= 50;
+				SetPlayerSkin(playerid, 119);
+				return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
+				}
+				case 7: // Farm Inhabitant
+				{
+				if (GetPlayerMoney(playerid) < 500)
+				return SendClientMessage(playerid, 0xCCFF00AA, "You don't have enough cash to buy this Skin.");
+				GivePlayerMoney(playerid, -500);
+				pInfo[playerid][pCash] -= 500;
+				SetPlayerSkin(playerid, 128);
+				return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
+				}
+				case 8: // Big Smoke Armored
+				{
+				if (GetPlayerMoney(playerid) < 75)
+				return SendClientMessage(playerid, 0xFFFFFFAA, "You don't have enough cash to buy this Skin.");
+				GivePlayerMoney(playerid, -75);
+				pInfo[playerid][pCash] -= 75;
+				SetPlayerSkin(playerid, 149);
+				return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
+				}
+				case 9: // Black MIB agent
+				{
+				if (GetPlayerMoney(playerid) < 100)
+				return SendClientMessage(playerid, 0xFFFFFFAA, "You don't have enough cash to buy this Skin.");
+				GivePlayerMoney(playerid, -100);
+				pInfo[playerid][pCash] -= 100;
+				SetPlayerSkin(playerid, 166);
+				return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
+				}
+				case 10: // Jeffery "OG Loc" Martin/Cross
+				{
+				if (GetPlayerMoney(playerid) < 90)
+				return SendClientMessage(playerid, 0xFFFFFFAA, "You don't have enough cash to buy this Skin.");
+				GivePlayerMoney(playerid, -90);
+				pInfo[playerid][pCash] -= 90;
+				SetPlayerSkin(playerid, 293);
+				return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
+				}
+				case 11: // Claude Speed
+				{
+				if (GetPlayerMoney(playerid) < 150)
+				return SendClientMessage(playerid, 0xFFFFFFAA, "You don't have enough cash to buy this Skin.");
+				GivePlayerMoney(playerid, -150);
+				pInfo[playerid][pCash] -= 150;
+				SetPlayerSkin(playerid, 299);
+				return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
+				}
+				case 12: // Michael Toreno
+				{
+				if (GetPlayerMoney(playerid) < 200)
+				return SendClientMessage(playerid, 0xFFFFFFAA, "You don't have enough cash to buy this Skin.");
+				GivePlayerMoney(playerid, -200);
+				pInfo[playerid][pCash] -= 200;
+				SetPlayerSkin(playerid, 295);
+				return ShowPlayerDialog(playerid,DIALOG_SKINS,DIALOG_STYLE_TABLIST_HEADERS, "SKINS", "Skin\tPrice\nAndre\t$50\nBarry \"Big Bear\" Thorne\t$75\nTruth\t$65\nUnemployed\t$100\nBackpacker\t$80\nMafia Boss\t$50\nJohhny Sindacco\t$75\nFarm Inhabitant\t$100\nBig Smoke Armored\t$100\nBlack MIB agent\t$90\nJeffrey \"OG Loc\" Cross\t$150\nClaude Speed\t$200\nMichael Toreno\t$190","Buy","Back");
 				}
 			}
 		}
@@ -1824,41 +1729,72 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 		case DIALOG_COINS_TOYS:
 		{
 			if ( !response ) return ShowPlayerDialog(playerid, DIALOG_WEAPONS_SHOP, DIALOG_STYLE_LIST, "{FFFFFF}SHOP", "Weapons\nSkins\nClasses\nToken Shop\nPerks", "Select", "Close");
-			if (response)
+			
+			switch (listitem)
 			{
-				switch (listitem)
-				{
-					case 0: if (pInfo[playerid][pCoins] >= 1) pInfo[playerid][pCoins] -= 1,SetPlayerAttachedObject(playerid, 0, 1550, 1, -0.029999, -0.159999, -0.019999, -180.000000, 85.000000, -10.000000); else { SendCoinError(playerid,1); }
-					case 1: if (pInfo[playerid][pCoins] >= 1) pInfo[playerid][pCoins] -= 1,SetPlayerAttachedObject(playerid, 0, 19078, 3, -0.042999, 0.010000, -0.043999, 161.399993, 166.699981, -3.700001, 1.000000, 1.000000, 1.000000, 0, 0); else { SendCoinError(playerid,1); }
-					case 2: if (pInfo[playerid][pCoins] >= 1) pInfo[playerid][pCoins] -= 1,SetPlayerAttachedObject(playerid, 0, 18963, 2, 0.064000, 0.032999, -0.000999, 84.699981, 93.199989, 0.000000, 1.179999, 1.385999, 1.429999, 0, 0); else { SendCoinError(playerid,1); }
-					case 3: if (pInfo[playerid][pCoins] >= 1) pInfo[playerid][pCoins] -= 1,SetPlayerAttachedObject(playerid, 0, 19137, 2, 0.114000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 1.000000, 1.000000, 1.000000, 0, 0); else { SendCoinError(playerid,1); }
-					case 4: if (pInfo[playerid][pCoins] >= 1) pInfo[playerid][pCoins] -= 1,SetPlayerAttachedObject(playerid, 0, 19036, 2, 0.097000, -0.002999, 0.000000, 90.099983, 79.099975, 0.000000, 1.012000, 1.000000, 1.000000, 0, 0); else { SendCoinError(playerid,1); }
-					case 5: if (pInfo[playerid][pCoins] >= 1) pInfo[playerid][pCoins] -= 1,SetPlayerAttachedObject(playerid, 0, 19847, 5, 0.088000, 0.005000, -0.048000, 52.799999, -3.099998, 1.699998, 1.000000, 1.000000, 1.000000, 0, 0); else { SendCoinError(playerid,1); }
-					case 6: if (pInfo[playerid][pCoins] >= 1) pInfo[playerid][pCoins] -= 1,SetPlayerAttachedObject(playerid, 0, 19320, 2, 0.111000, 0.000000, 0.012000, 1.700000, 77.500007, 0.000000, 0.476000, 0.457000, 0.588999, 0, 0); else { SendCoinError(playerid,1); }
-				}
+				case 0: if (pInfo[playerid][pCoins] >= 1) pInfo[playerid][pCoins] -= 1,SetPlayerAttachedObject(playerid, 0, 1550, 1, -0.029999, -0.159999, -0.019999, -180.000000, 85.000000, -10.000000); else { SendCoinError(playerid,1); }
+				case 1: if (pInfo[playerid][pCoins] >= 1) pInfo[playerid][pCoins] -= 1,SetPlayerAttachedObject(playerid, 0, 19078, 3, -0.042999, 0.010000, -0.043999, 161.399993, 166.699981, -3.700001, 1.000000, 1.000000, 1.000000, 0, 0); else { SendCoinError(playerid,1); }
+				case 2: if (pInfo[playerid][pCoins] >= 1) pInfo[playerid][pCoins] -= 1,SetPlayerAttachedObject(playerid, 0, 18963, 2, 0.064000, 0.032999, -0.000999, 84.699981, 93.199989, 0.000000, 1.179999, 1.385999, 1.429999, 0, 0); else { SendCoinError(playerid,1); }
+				case 3: if (pInfo[playerid][pCoins] >= 1) pInfo[playerid][pCoins] -= 1,SetPlayerAttachedObject(playerid, 0, 19137, 2, 0.114000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 1.000000, 1.000000, 1.000000, 0, 0); else { SendCoinError(playerid,1); }
+				case 4: if (pInfo[playerid][pCoins] >= 1) pInfo[playerid][pCoins] -= 1,SetPlayerAttachedObject(playerid, 0, 19036, 2, 0.097000, -0.002999, 0.000000, 90.099983, 79.099975, 0.000000, 1.012000, 1.000000, 1.000000, 0, 0); else { SendCoinError(playerid,1); }
+				case 5: if (pInfo[playerid][pCoins] >= 1) pInfo[playerid][pCoins] -= 1,SetPlayerAttachedObject(playerid, 0, 19847, 5, 0.088000, 0.005000, -0.048000, 52.799999, -3.099998, 1.699998, 1.000000, 1.000000, 1.000000, 0, 0); else { SendCoinError(playerid,1); }
+				case 6: if (pInfo[playerid][pCoins] >= 1) pInfo[playerid][pCoins] -= 1,SetPlayerAttachedObject(playerid, 0, 19320, 2, 0.111000, 0.000000, 0.012000, 1.700000, 77.500007, 0.000000, 0.476000, 0.457000, 0.588999, 0, 0); else { SendCoinError(playerid,1); }
 			}
+
+			return 1;
 		}
 
-		case DIALOG_COINS:
-		{
-			if (response)
-			{
-				if (pInfo[playerid][pTeam] == TEAM_HUMAN)
-				{
-					switch (listitem)
-					{
-						case 0: if (pInfo[playerid][pCoins] >= 45) pInfo[playerid][pCoins] -= 45,pInfo[playerid][pKickBackCoin] = 1; else { SendCoinError(playerid,45); }
-						case 1: if (pInfo[playerid][pCoins] >= 40) pInfo[playerid][pCoins] -= 40,pInfo[playerid][pDamageShotgunCoin] = 1; else { SendCoinError(playerid,40); }
-						case 2: if (pInfo[playerid][pCoins] >= 50) pInfo[playerid][pCoins] -= 50,pInfo[playerid][pDamageDeagleCoin] = 1; else { SendCoinError(playerid,50); }
-						case 3: if (pInfo[playerid][pCoins] >= 30) pInfo[playerid][pCoins] -= 30,pInfo[playerid][pDamageMP5Coin] = 1; else { SendCoinError(playerid,30); }
-						case 4: if (pInfo[playerid][pCoins] >= 25) pInfo[playerid][pCoins] -= 25,SetPlayerAttachedObject(playerid,0,19142,1,0.028000,0.034000,0.000000,0.000000,0.000000,0.000000,1.063000,1.191999,1.285999); else { SendCoinError(playerid,25); }
-						case 5: ShowPlayerDialog(playerid,DIALOG_COINS_TOYS,DIALOG_STYLE_LIST,"ACCESSORIES","Money Bag\nParrot\nCJ's Head\nCluckinBell Hat\nHockey Mask\nMeat\nPumpkin","Select","Back");
-					}
+		case DIALOG_COINS: { // Modified by Logic_
+			if (!response) return 1;
+
+			if (pInfo[playerid][pTeam] != TEAM_HUMAN) return 1;
+			
+			switch (listitem) {
+				case 0: {
+					if (pInfo[playerid][pCoins] < 45) return SendCoinError(playerid, 45);
+
+					pInfo[playerid][pCoins] -= 45;
+					pInfo[playerid][pKickBackCoin] = 1;
+				}
+				
+				case 1: {
+					if (pInfo[playerid][pCoins] < 40) return SendCoinError(playerid, 40);
+
+					pInfo[playerid][pCoins] -= 40;
+					pInfo[playerid][pDamageShotgunCoin] = 1;
+				}
+
+				case 2: {
+					if (pInfo[playerid][pCoins] < 50) return SendCoinError(playerid, 50);
+
+					pInfo[playerid][pCoins] -= 50;
+					pInfo[playerid][pDamageDeagleCoin] = 1;
+				}
+
+				case 3: {
+					if (pInfo[playerid][pCoins] < 30) return SendCoinError(playerid, 30);
+
+					pInfo[playerid][pCoins] -= 30;
+					pInfo[playerid][pDamageMP5Coin] = 1;
+				}
+
+				case 4: {
+					if (pInfo[playerid][pCoins] < 25) return SendCoinError(playerid, 25);
+
+					pInfo[playerid][pCoins] -= 25;
+					SetPlayerAttachedObject(playerid,0,19142,1,0.028000,0.034000,0.000000,0.000000,0.000000,0.000000,1.063000,1.191999,1.285999);
+				}
+
+				case 5: {
+					ShowPlayerDialog(playerid,DIALOG_COINS_TOYS,DIALOG_STYLE_LIST,"ACCESSORIES","Money Bag\nParrot\nCJ's Head\nCluckinBell Hat\nHockey Mask\nMeat\nPumpkin","Select","Back");
 				}
 			}
+
+			return 1;
 		}
 	}
-	return 1;
+	
+	return 0;
 }
 
 public OnPlayerDeath(playerid, killerid, reason)
@@ -2145,26 +2081,23 @@ public OnPlayerTakeDamage(playerid, issuerid, Float: amount, weaponid, bodypart)
 		}
 	}
 
-	if (pInfo[issuerid][pTeam] == TEAM_HUMAN)
+	if (pInfo[issuerid][pTeam] == TEAM_HUMAN && pInfo[issuerid][pClass] == SNIPER)
 	{
-		if (pInfo[issuerid][pClass] == SNIPER)
+		if (pInfo[playerid][pTeam] == TEAM_ZOMBIE)
 		{
-			if (pInfo[playerid][pTeam] == TEAM_ZOMBIE)
+			if (weaponid == WEAPON_SNIPER && bodypart == BODY_PART_HEAD)
 			{
-				if (weaponid == 34 && bodypart == 9)
-				{
-					SetPlayerHealth(playerid, -0);
-					GameTextForPlayer(playerid, "~n~~r~HEADSHOT", 3000, 3);
-					GameTextForPlayer(issuerid, "~n~~g~HEADSHOT", 3000, 3);
-					
-					new Float:x, Float:y, Float:z, Float:fDistance, hsMessage[90];
-					GetPlayerPos(playerid, x, y, z);
-					fDistance = GetPlayerDistanceFromPoint(issuerid, x, y, z);
+				SetPlayerHealth(playerid, -0);
+				GameTextForPlayer(playerid, "~n~~r~HEADSHOT", 3000, 3);
+				GameTextForPlayer(issuerid, "~n~~g~HEADSHOT", 3000, 3);
+				
+				new Float:x, Float:y, Float:z, Float:fDistance, hsMessage[90];
+				GetPlayerPos(playerid, x, y, z);
+				fDistance = GetPlayerDistanceFromPoint(issuerid, x, y, z);
 
-					format(hsMessage, sizeof(hsMessage), "{DC143C}%s has Headshotted {FFFFFF}%s{DC143C} from the distance of %0.2f", GetPlayerNameEx(issuerid), GetPlayerNameEx(playerid), fDistance);
-					SendClientMessageToAll(-1, hsMessage);
-					pInfo[issuerid][pHeads]++;
-				}
+				format(hsMessage, sizeof(hsMessage), "{DC143C}%s has Headshotted {FFFFFF}%s{DC143C} from the distance of %0.2f", GetPlayerNameEx(issuerid), GetPlayerNameEx(playerid), fDistance);
+				SendClientMessageToAll(-1, hsMessage);
+				pInfo[issuerid][pHeads]++;
 			}
 		}
 	}
@@ -2180,28 +2113,23 @@ public OnPlayerText(playerid, text[]) { // Updated by Logic_
 	SetPVarInt(playerid, "SPS Messages Sent", GetPVarInt(playerid, "SPS Messages Sent") + 1);
 	SetTimerEx("SPS_Remove_Messages_Limit", 1500, 0, "i", playerid);
 
-	if (GetPVarInt(playerid, "SPS Messages Sent") >= 4)
-	{
-		if (!(((GetPVarInt(playerid, "SPS Spam Warnings") + 2) == 3)))
-		{
+	if (GetPVarInt(playerid, "SPS Messages Sent") >= 4) {
+		if (!(((GetPVarInt(playerid, "SPS Spam Warnings") + 2) == 3))) {
 			SendClientMessage(playerid, -1, ""chat""COL_LIGHTBLUE" {99CCFF}Please, do not spam.");
 		}
 		SetPVarInt(playerid, "SPS Spam Warnings", GetPVarInt(playerid, "SPS Spam Warnings") + 1);
 	}
 
-	if (pInfo[playerid][IsPlayerMuted] == 1) SendClientMessage(playerid,-1,""chat" {99CCFF}You are muted.");
+	if (pInfo[playerid][Muted] == 1) SendClientMessage(playerid,-1,""chat" {99CCFF}You are muted.");
 
-	if (strfind(text, ":", true) != -1)
-	{
+	if (strfind(text, ":", true) != -1) {
 		new i_numcount, i_period, i_pos;
-		while(text[i_pos])
-		{
+		while(text[i_pos]) {
 			if ('0' <= text[i_pos] <= '9') i_numcount ++;
 			else if (text[i_pos] == '.') i_period ++;
 			i_pos++;
 		}
-		if (i_numcount >= 8 && i_period >= 3)
-		{
+		if (i_numcount >= 8 && i_period >= 3) {
 			BanPlayer(playerid, "Possible Adv", INVALID_PLAYER_ID);
 			return 0;
 		}
@@ -2214,8 +2142,8 @@ public OnPlayerText(playerid, text[]) { // Updated by Logic_
 	return 0;
 }
 
-custom PlantBomb(playerid) {
-	if (!pInfo[playerid][pBombs]) return NotifyPlayer(playerid, "You don't have any bombs left.");
+custom PlantBomb(playerid) { // A completely new bomb system made from Scratch by Logic_
+	if (!pInfo[playerid][pBombs]) return NotifyPlayer(playerid, "~r~You don't have any bombs left.");
 
 	new Float: x, Float: y, Float: z, string[40];
 
@@ -2227,10 +2155,12 @@ custom PlantBomb(playerid) {
 	SendClientMessage(playerid,-1,string);
 
 	new index;
-	if ((index = GetFreeBombID()) == -1) return NotifyPlayer(playerid, "No more bombs can be placed!");
+	if ((index = GetFreeBombID()) == -1) return NotifyPlayer(playerid, "~r~No more bombs can be placed!");
 	
-	gBomb[index][E_BOMB_OBJECT] = CreateObject(1252, x, y, z - 0.25, 0.0, 0.0, 90.0, 500.0);
+	gBomb[index][E_BOMB_OBJECT] = CreateDynamicObject(1252, x, y, z - 0.25, 0.0, 0.0, 90.0);
 	gBomb[index][E_BOMB_PLAYERID] = playerid;
+
+	PlayerPlaySound(playerid, 1057, 0.0, 0.0, 0.0);
 	return 1;
 }
 
@@ -2277,9 +2207,81 @@ custom GetFreeBombID() {
 custom ResetBombs() {
 	for (new i; i < MAX_BOMBS; i++) {
 		gBomb[i][E_BOMB_PLAYERID] = INVALID_PLAYER_ID;
+
+		if (IsValidDynamicObject(gBomb[i][E_BOMB_OBJECT])) DestroyDynamicObject(gBomb[i][E_BOMB_OBJECT]);
 		gBomb[i][E_BOMB_OBJECT] = INVALID_OBJECT_ID;
 	}
 
+	return 1;
+}
+
+custom GetFreeShieldID() { // Completely new scratch written Shield system by Logic_
+	for (new i; i < MAX_SHIELDS; i++) {
+		if (gShields[i][E_SHIELD_PLAYERID] != INVALID_PLAYER_ID) continue;
+
+		return i;
+	}
+	return -1;
+}
+
+custom PlantShield(playerid) {
+	if (!pInfo[playerid][pDoctorShield]) return NotifyPlayer(playerid, "~r~You don't have any shields left.");
+
+	new Float:pz, Float:x, Float:y, Float:z, string[40];
+	
+	GetPlayerPos(playerid, x, y, z);
+	GetPlayerFacingAngle(playerid, pz);
+	pInfo[playerid][pDoctorShield] -= 1;
+
+	format(string, sizeof string,""chat" You have %i Scientist shields left.",pInfo[playerid][pDoctorShield]);
+	SendClientMessage(playerid,-1,string);
+	
+	new index;
+	if ((index = GetFreeShieldID()) == -1) return NotifyPlayer(playerid, "~r~No more shields can be placed!");
+
+	GetXYInFrontOfPlayer(playerid,  x, y, 1.0);
+	gShields[index][E_SHIELD_OBJECT] = CreateDynamicObject(3534, x, y, z, 0.0, 0.0, pz);
+	gShields[index][E_SHIELD_PLAYERID] = playerid;
+	
+	PlayerPlaySound(playerid, 1057, 0.0, 0.0, 0.0);
+	return 1;
+}
+
+custom ResetShields() {
+	for (new i; i < MAX_SHIELDS; i++) {
+		gShields[i][E_SHIELD_PLAYERID] = INVALID_PLAYER_ID;
+
+		if (IsValidDynamicObject(gShields[i][E_SHIELD_OBJECT])) DestroyDynamicObject(gShields[i][E_SHIELD_OBJECT]);
+		gShields[i][E_SHIELD_OBJECT] = INVALID_OBJECT_ID;
+	}
+	return 1;
+}
+
+custom DoctorShield() {
+
+	new i, Float: distance, Float: x, Float: y, Float: z, Float: health;
+
+	for (; i < MAX_SHIELDS; i++) {
+		if (gShields[i][E_SHIELD_PLAYERID] == INVALID_PLAYER_ID) continue;
+
+		foreach (new j : Player) {
+			if (pInfo[j][pTeam] != TEAM_HUMAN) continue; 
+
+			GetPlayerPos(j, x, y, z);
+
+			Streamer_GetDistanceToItem(x, y, z, STREAMER_TYPE_OBJECT, gShields[i][E_SHIELD_OBJECT], distance);
+
+			if (distance <= 5.0) {
+				GetPlayerHealth(j, health);
+				
+				if (health <= 80.0) {
+					SetPlayerHealth(j, health + 3.5);
+
+					NotifyPlayer(j, "~n~~n~~n~~n~~g~GETTING HEALED BY DOCTOR SHIELD!");
+				}
+			}
+		}
+	}
 	return 1;
 }
 
@@ -2391,21 +2393,7 @@ public OnPlayerKeyStateChange(playerid, newkeys, oldkeys) { // Modified by Logic
 				}
 
 				case DOCTOR: {
-					if (pInfo[playerid][pDoctorShield] >= 1)
-					{
-						new Float:pz, Float:x, Float:y, Float:z;
-						GetPlayerFacingAngle(playerid, pz);
-						GetPlayerPos(playerid, Float:x, Float:y, Float:z);
-
-						new string[128];
-						pInfo[playerid][pDoctorShield] -= 1;
-						GetXYInFrontOfPlayer(playerid, Float:x,Float:y, 1.0);
-						DocShield = CreateObject(3534,Float:x,Float:y,Float:z,0.0,0.0,pz,500.0);
-						format(string, sizeof string,""chat" You have %i Scientist shields left.",pInfo[playerid][pDoctorShield]);
-						SendClientMessage(playerid,-1,string);
-						PlayerPlaySound(playerid,1057,0.0,0.0,0.0);
-					}
-					else return SendClientMessage(playerid,-1,""chat" You ran out of shields!");
+					PlantShield(playerid);
 				}
 
 				case TERRORIST: {
@@ -2483,7 +2471,7 @@ public OnPlayerKeyStateChange(playerid, newkeys, oldkeys) { // Modified by Logic
 
 								if (pInfo[i][IsPlayerInfected] == 0)
 								{
-									InfectPlayerStandard(i);
+									InfectPlayerMutated(i);
 									GivePlayerXP(playerid,10);
 									GameTextForPlayer(playerid,"~n~~n~~n~~n~~n~~y~+10 XP",3500,5);
 									Abilitys[playerid][AdvancedMutatedCooldown] = gettime();
@@ -3288,8 +3276,7 @@ CMD:pstats(playerid,params[])
 
 CMD:dnd(playerid) {
 
-	SendClientMessage(playerid, -1, (pInfo[playerid][pPM] ^= 1, pInfo[playerid][pPM]) ? ""chat" You are now blocking private messages." : ""chat" You are not blocking anymore private messages.");
-	return 1;
+	return SendClientMessage(playerid, -1, (pInfo[playerid][pPM] ^= 1, pInfo[playerid][pPM]) ? ""chat" You are now blocking private messages." : ""chat" You are not blocking anymore private messages."), 1;
 }
 
 CMD:maps(playerid) {
@@ -3297,6 +3284,13 @@ CMD:maps(playerid) {
 	new string[2000];
 
 	strcat(string, "All of the server maps are listed here:\nThis includes all the creations of our mappers and other people along with their credits.\n\n\n");
+
+	/*
+	for (new i; i < MAX_MAPS; i++) {
+		if (!gMaps[i]) contiue;
+
+		strcat(string, gMapNames[i]);
+	}*/
 
 	strcat(string, "{ffffff}MAP#00: {FFB266}LVPD/Las Venturas Police Department <Interior Map>\n");
 	strcat(string, "{ffffff}MAP#01: {FFB266}Jefferson Motel <Interior Map>\n");
@@ -3347,82 +3341,82 @@ CMD:dance(playerid, params[])
 {
 	switch (strval(params))
 	{
-	case 1: SetPlayerSpecialAction(playerid, 5);
-	case 2: SetPlayerSpecialAction(playerid, 6);
-	case 3: SetPlayerSpecialAction(playerid, 7);
-	case 4: SetPlayerSpecialAction(playerid, 8);
-	default: SendClientMessage(playerid, COLOR_WHITE, "{C0C0C0}USAGE: /dance [1-4]");
+		case 1: SetPlayerSpecialAction(playerid, 5);
+		case 2: SetPlayerSpecialAction(playerid, 6);
+		case 3: SetPlayerSpecialAction(playerid, 7);
+		case 4: SetPlayerSpecialAction(playerid, 8);
+		default: SendClientMessage(playerid, COLOR_WHITE, "{C0C0C0}USAGE: /dance [1-4]");
 	}
 	return 1;
 }
 
-CMD:sit(playerid, params[])
+CMD:sit(playerid)
 {
 	ApplyAnimation(playerid, "BEACH", "ParkSit_M_loop", 4.1, 1, 0, 0, 0, 0);
 	return 1;
 }
 
-CMD:crossarms(playerid, params[])
+CMD:crossarms(playerid)
 {
 	ApplyAnimation(playerid, "COP_AMBIENT", "Coplook_loop", 4.0, 0, 1, 1, 1, -1);
 	return 1;
 }
 
-CMD:fucku(playerid, params[])
+CMD:fucku(playerid)
 {
 	ApplyAnimation(playerid,"PED","fucku",4.0,0,0,0,0,0);
 	return 1;
 }
 
-CMD:handsup(playerid, params[])
+CMD:handsup(playerid)
 {
 	SetPlayerSpecialAction(playerid, SPECIAL_ACTION_HANDSUP);
 	return 1;
 }
 
-CMD:cigar(playerid, params[])
+CMD:cigar(playerid)
 {
 	SetPlayerSpecialAction(playerid, SPECIAL_ACTION_SMOKE_CIGGY);
 	return 1;
 }
 
-CMD:piss(playerid, params[])
+CMD:piss(playerid)
 {
 	ApplyAnimation(playerid, "PAULNMAC", "Piss_loop", 4.1, 1, 0, 0, 0, 0);
 	return 1;
 }
 
-CMD:wank(playerid, params[])
+CMD:wank(playerid)
 {
 	ApplyAnimation(playerid, "PAULNMAC", "wank_loop", 4.1, 1, 0, 0, 0, 0);
 	return 1;
 }
 
-CMD:vomit(playerid, params[])
+CMD:vomit(playerid)
 {
 	ApplyAnimation(playerid, "FOOD", "EAT_Vomit_P", 4.1, 1, 0, 0, 0, 0);
 	return 1;
 }
 
-CMD:drunk(playerid, params[])
+CMD:drunk(playerid)
 {
 	ApplyAnimation(playerid, "PED", "WALK_DRUNK", 4.1, 1, 0, 0, 0, 0);
 	return 1;
 }
 
-CMD:wave(playerid, params[])
+CMD:wave(playerid)
 {
 	ApplyAnimation(playerid, "ON_LOOKERS", "wave_loop", 4.1, 1, 0, 0, 0, 0);
 	return 1;
 }
 
-CMD:lay(playerid, params[])
+CMD:lay(playerid)
 {
 	ApplyAnimation(playerid, "BEACH", "Lay_Bac_Loop", 4.1, 1, 0, 0, 0, 0);
 	return 1;
 }
 
-CMD:smoke(playerid, params[])
+CMD:smoke(playerid)
 {
 	ApplyAnimation(playerid, "SHOP", "Smoke_RYD", 4.1, 1, 0, 0, 0, 0);
 	return 1;
@@ -3684,9 +3678,8 @@ CMD:acmds(playerid)
 	if (pInfo[playerid][pAdminLevel] > 4) strcat(acmdstring,"{DC143C}Manager{ffffff}: /givecash /givexp /givetokens /setxp\n\n"); // 65
 
 	if (pInfo[playerid][pAdminLevel] > 5) strcat(acmdstring,"{DC143C}Owner{ffffff}: /setvip /setadmin /nuke /offlinesetadmin /offlinesetvip\n"); // 80
-		
-	ShowPlayerDialog(playerid,DIALOG_ACMDS,DIALOG_STYLE_MSGBOX,"{DC143C}Administrative Commands:", acmdstring, "Close", "");
-	return 1;
+	
+	return ShowPlayerDialog(playerid,DIALOG_ACMDS,DIALOG_STYLE_MSGBOX,"{DC143C}Administrative Commands:", acmdstring, "Close", ""), 1;
 }
 
 new aduty[MAX_PLAYERS];
@@ -3911,16 +3904,14 @@ CMD:unfreeze(playerid,params[])
 	return 1;
 }
 
-CMD:codes(playerid)
-{
-	if (pInfo[playerid][pAdminLevel] >= 1)
-	{
-		new cstring[2000];
-		strcat(cstring,"{DC143C}HH{ffffff} - Health Hacks {DC143C}(Permanent)\n{DC143C}GM{ffffff} - God Mode {DC143C}(Permanent)\n{DC143C}AB{ffffff} - Air Break {DC143C}(Permanent)\n{DC143C}SH{ffffff} - Speed Hacks {DC143C}(Permanent)\n{DC143C}WH{ffffff} - Weapon Hacks {DC143C}(Permanent)\n\
-		{DC143C}SK{ffffff} - Spawnkill {DC143C}(Over did)\n{DC143C}FH{ffffff} - Fly hacks {DC143C}(Permanent)\n{DC143C}VH{ffffff} - Vehicle Hacks {DC143C}(Permanent)");
-		ShowPlayerDialog(playerid,9511,DIALOG_STYLE_MSGBOX,"{DC143C}Ban Codes",cstring,"Close","");
-	}
-	return 1;
+CMD:codes(playerid) {
+	if (!pInfo[playerid][pAdminLevel]) return 1;
+
+	new cstring[2000];
+	strcat(cstring,"{DC143C}HH{ffffff} - Health Hacks {DC143C}(Permanent)\n{DC143C}GM{ffffff} - God Mode {DC143C}(Permanent)\n{DC143C}AB{ffffff} - Air Break {DC143C}(Permanent)\n{DC143C}SH{ffffff} - Speed Hacks {DC143C}(Permanent)\n{DC143C}WH{ffffff} - Weapon Hacks {DC143C}(Permanent)\n\
+	{DC143C}SK{ffffff} - Spawnkill {DC143C}(Over did)\n{DC143C}FH{ffffff} - Fly hacks {DC143C}(Permanent)\n{DC143C}VH{ffffff} - Vehicle Hacks {DC143C}(Permanent)");
+
+	return ShowPlayerDialog(playerid, 0, DIALOG_STYLE_MSGBOX, "{DC143C}Ban Codes", cstring, "Close", ""), 1;
 }
 
 CMD:getid(playerid,params[])
@@ -4152,7 +4143,7 @@ CMD:mute(playerid,params[])
 		if (sscanf(params, "us[105]", lookupid,reason)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /mute [playerid] [reason]");
 		if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 
-		pInfo[lookupid][IsPlayerMuted] = 1;
+		pInfo[lookupid][Muted] = 1;
 
 		format(string, sizeof string,"{DC143C}%s %s has muted %s [Reason: %s]",GetAdminRankName(playerid), GetPlayerNameEx(playerid),GetPlayerNameEx(lookupid),reason);
 		SendMessageToAdmins(string,-1);
@@ -4174,13 +4165,13 @@ CMD:unmute(playerid,params[])
 		if (sscanf(params, "u", lookupid)) return SendClientMessage(playerid,-1,"{C0C0C0}USAGE: /unmute [playerid]");
 		if (!IsPlayerConnected(lookupid)) return SendClientMessage(playerid,-1,""chat" Player is not online.");
 
-		if (pInfo[lookupid][IsPlayerMuted] == 1)
+		if (pInfo[lookupid][Muted] == 1)
 		{
 			format(string, sizeof string,"{DC143C}%s %s has unmuted you",GetAdminRankName(playerid), GetPlayerNameEx(playerid));
 			SendClientMessage(lookupid,-1,string);
 			format(string, sizeof string,""chat" You unmuted %s",GetPlayerNameEx(lookupid));
 			SendClientMessage(playerid,-1,string);
-			pInfo[lookupid][IsPlayerMuted] = 0;
+			pInfo[lookupid][Muted] = 0;
 		}
 		else
 		{
@@ -4898,6 +4889,10 @@ LoadAccount(playerid)
 	pInfo[playerid][pTime] = db_get_field_assoc_int(result, FIELD_TIME);
 	pInfo[playerid][pMapsPlayed] = db_get_field_assoc_int(result, FIELD_MAPS);
 	pInfo[playerid][pCoins] = db_get_field_assoc_int(result, FIELD_COINS);
+	pInfo[playerid][pKickBackCoin] = db_get_field_assoc_int(result, FIELD_KICKBACK);
+	pInfo[playerid][pDamageShotgunCoin] = db_get_field_assoc_int(result, FIELD_DMGSHOTGUN);
+	pInfo[playerid][pDamageDeagleCoin] = db_get_field_assoc_int(result, FIELD_DMGDEAGLE);
+	pInfo[playerid][pDamageMP5Coin] = db_get_field_assoc_int(result, FIELD_DMGMP5);
 
 	db_free_result(result);
 	return 1;
@@ -5919,11 +5914,9 @@ custom IsValidWeapon( weaponid )
 	return 0;
 }
 
-custom GetXPName() // Modified by Logic_
-{
+custom GetXPName() { // Modified by Logic_
 	new str[11];
-	switch (Map[XPType])
-	{
+	switch (Map[XPType]) {
 		case 1: str = "Normal XP";
 		case 2: str = "Double XP";
 		case 3: str = "Triple XP";
@@ -5932,20 +5925,18 @@ custom GetXPName() // Modified by Logic_
 	return str;
 }
 
-custom CheckToLevelOrRankUp(killerid)
-{
-	new i = sizeof gRanks, previous_rank = pInfo[killerid][pRank];
+custom CheckToLevelOrRankUp(killerid) {
+	new
+		i = sizeof gRanks, previous_rank = pInfo[killerid][pRank];
 	
-	for(; i > -1; i--)
-	{
+	for(; i > -1; i--) {
 		if (gRanks[i][E_RANKS_KILLS] != pInfo[killerid][pKills]) continue;
 
 		pInfo[killerid][pRank] = i;
 		break;
 	}
 
-	if (previous_rank != i)
-	{
+	if (previous_rank != i) {
 		new str[128];
 		format(str, sizeof str, "{D9B9DA} %s has ranked up to rank %s (%d).", GetPlayerNameEx(killerid), pInfo[killerid][pRank]);
 		SendClientMessageToAll(-1, str);
@@ -5955,42 +5946,18 @@ custom CheckToLevelOrRankUp(killerid)
 	return 1;
 }
 
-function HideiKilled(playerid)
-{
+function HideiKilled(playerid) {
 	return TextDrawHideForPlayer(playerid, iKilled[playerid]), 1;
 }
 
-function C4Explode(playerid)
-{
-	new Float:X,Float:Y,Float:Z;
-	new Float:hp;
-	GetObjectPos(c4Obj[playerid],X,Y,Z);
-	foreach(new i : Player)
-	{
-		if (IsPlayerInRangeOfPoint(i, 3.5,X,Y,Z))
-		{
-			if (pInfo[i][pTeam] == TEAM_ZOMBIE)
-			{
-				GetPlayerHealth(i,hp);
-				SetPlayerHealth(i,hp-35);
-			}
-		}
-	}
-	CreateExplosion(X,Y,Z,1,10.0);
-	DestroyObject(c4Obj[playerid]);
-	return 1;
-}
-
-custom SpawnVars(playerid)
-{
+custom SpawnVars(playerid) {
 	TextDrawHideForPlayer(playerid, ServerIntroOne[playerid]);
 	TextDrawHideForPlayer(playerid, ServerIntroTwo[playerid]);
 	ShowTextdrawsAfterConnect(playerid);
 	return 1;
 }
 
-custom ShowTextdrawsAfterConnect(playerid)
-{
+custom ShowTextdrawsAfterConnect(playerid) {
 	TextDrawShowForPlayer(playerid, TimeLeft);
 	TextDrawShowForPlayer(playerid, UntilRescue);
 	TextDrawShowForPlayer(playerid, AliveInfo);
@@ -6013,8 +5980,7 @@ custom ShowTextdrawsAfterConnect(playerid)
 	return 1;
 }
 
-custom hideTextdrawsAfterConnect(playerid)
-{
+custom hideTextdrawsAfterConnect(playerid) {
 	TextDrawHideForPlayer(playerid, TimeLeft);
 	TextDrawHideForPlayer(playerid, UntilRescue);
 	TextDrawHideForPlayer(playerid, AliveInfo);
@@ -6037,8 +6003,7 @@ custom hideTextdrawsAfterConnect(playerid)
 	return 1;
 }
 
-function SPS_Reset_PVars()
-{
+function SPS_Reset_PVars() {
 	for(new i; i < MAX_PLAYERS; i++) {
 		if (GetPVarType(i, "SPS Muted") != PLAYER_VARTYPE_NONE) {
 			SetPVarInt(i, "SPS Muted", 0);
@@ -6080,8 +6045,7 @@ function SPS_Remove_Messages_Limit(playerid) { // Modified by Logic_
 	return 1;
 }
 
-function SPS_Unmute_Player(playerid)
-{
+function SPS_Unmute_Player(playerid) {
 	SendClientMessage(playerid, -1, "{CCFFFF}You have been automatically unmuted.");
 	SetPVarInt(playerid, "SPS Muted", 0);
 	return 1;
@@ -6112,7 +6076,7 @@ custom CheckPlayerKillStreak(killerid) { // Added by Logic_
 	new
 		kills = pInfo[killerid][Killstreak];
 
-	if ((!(kills % 5))) {
+	if (! (kills % 5)) {
 		new
 			tokens = (kills / 5),
 			xp = (kills * 2),
