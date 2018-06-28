@@ -88,8 +88,8 @@
 #define		FIELD_MAPS					"Maps"
 #define		FIELD_COINS					"Coins"
 #define		FIELD_KICKBACK				"Kickback" // New additions in Build 4
-#define		FIELD_DMGSHOTGUN			"DamageShotgun" // New additions in Build 4
 #define		FIELD_DMGDEAGLE				"DamageDeagle" // New additions in Build 4
+#define		FIELD_DMGSHOTGUN			"DamageShotgun" // New additions in Build 4
 #define		FIELD_DMGMP5				"DamageMP5" // New additions in Build 4
 
 #define		TABLE_MAPS					"`Maps`"
@@ -1076,21 +1076,19 @@ public OnPlayerConnect(playerid)
 	return 1;
 }
 
-CheckPlayerAccount(playerid)
-{
+CheckPlayerAccount(playerid) {
+	
 	new query[128], DBResult: result;
 	format(query, sizeof query, "SELECT "FIELD_PASSWORD", "FIELD_ID" FROM "TABLE_USERS" WHERE "FIELD_NAME" = '%q'", GetPlayerNameEx(playerid));
 	result = db_query(gSQL, query);
 
-	if (db_num_rows(result))
-	{
+	if (db_num_rows(result)) {
 		db_get_field_assoc(result, FIELD_PASSWORD, pInfo[playerid][pPassword], MAX_PASSWORD_LEN);
 		pInfo[playerid][pID] = db_get_field_assoc_int(result, FIELD_ID);
 
 		ShowPlayerDialog(playerid, DIALOG_LOGIN, DIALOG_STYLE_PASSWORD, "Zombieland :: Login", ""chat" Our system has detected your username is registered, please login to continue:", "Login", "Quit");
 	}
-	else
-	{
+	else {
 		ShowPlayerDialog(playerid, DIALOG_REGISTER, DIALOG_STYLE_PASSWORD, "Zombieland :: Register", ""chat" Our system has detected your username is not registered, please register to continue:", "Register", "Quit");
 	}
 
@@ -1098,16 +1096,15 @@ CheckPlayerAccount(playerid)
 	return 1;
 }
 
-public KickTimer(playerid)
-{
+public KickTimer(playerid) {
 	Kick(playerid);
 	return 1;
 }
 
 forward KickTimer(playerid);
 
-public OnPlayerWeaponShot( playerid, weaponid, hittype, hitid, Float:fX, Float:fY, Float:fZ )
-{
+public OnPlayerWeaponShot( playerid, weaponid, hittype, hitid, Float:fX, Float:fY, Float:fZ ) {
+	
 	new Float:x, Float:y, Float:z;
 	GetPlayerPos(playerid, x, y, z);
 
@@ -1116,8 +1113,8 @@ public OnPlayerWeaponShot( playerid, weaponid, hittype, hitid, Float:fX, Float:f
 	return 1;
 }
 
-SavePlayerAccount(playerid)
-{
+SavePlayerAccount(playerid) {
+
 	new query[200];
 	format(query, sizeof query,
 		"UPDATE "TABLE_USERS" SET "FIELD_CASH" = %d, "FIELD_XP" = %d, "FIELD_KILLS" = %d, "FIELD_DEATHS" = %d, "FIELD_HEADS" = %d WHERE "FIELD_ID" = %d",
@@ -1127,8 +1124,7 @@ SavePlayerAccount(playerid)
 	return 1;
 }
 
-public OnPlayerDisconnect(playerid, reason)
-{
+public OnPlayerDisconnect(playerid, reason) {
 	new string[39 + MAX_PLAYER_NAME];
 	switch (reason)
 	{
@@ -1283,7 +1279,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 				return ShowPlayerDialog(playerid, DIALOG_REGISTER, DIALOG_STYLE_PASSWORD, "Zombieland :: Register", ""chat" Our system has detected your username is not registered, please register to continue:", "Register", "Quit");
 			}
 			
-			new IP[16], query[200], DBResult: result;
+			new IP[16], query[224], DBResult: result;
 			GetPlayerIp(playerid, IP, sizeof IP);
 			SHA256_PassHash(inputtext, PASSWORD_SALT, pInfo[playerid][pPassword], MAX_PASSWORD_LEN);
 
