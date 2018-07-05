@@ -1,10 +1,10 @@
 /*
-	Script licensed to Logic_
-	Copyright 2017-2018
-	Licensed under The Digital Millennium Copyright Act of 1998 (https://www.copyright.gov/legislation/dmca.pdf)
-	Version 1 Build 4
-
-	Formerly known as Zombieland (samp-zombieland.info)
+	Zombieland ~ Version 1 Build 5
+	
+	Mode: Game mode/ TDM/ Zombie TDM/ Survival
+	Written from: Edit
+	
+	Authors: Sjutel, Kitten, Logic_, Private200 and others who contributed to this amazing project!
 */
 
 #include	<a_samp>
@@ -17,7 +17,9 @@
 #include	<izcmd>
 #include	<streamer>
 
-// Defines
+/*
+	Definitions
+*/
 #define		DB_PATH						"ZL/data.db" // The directory (path) of the database
 #define		NAME						"Zombieland (0.3.7)"
 #define		SITE						"samp-zombieland.info"
@@ -126,6 +128,19 @@
 
 #define		BODY_PART_HEAD				9
 
+/*
+	Teams
+*/
+
+enum {
+	TEAM_ZOMBIE = 0,
+	TEAM_HUMAN
+};
+
+/*
+	Dialogs
+*/
+
 enum
 {
 	DIALOG_REGISTER = 1,
@@ -163,15 +178,14 @@ enum
 	DIALOG_PASSWORD
 };
 
-#define TEAM_ZOMBIE 0
-#define TEAM_HUMAN 1
-
+/*
+	Colors
+*/
 #define COLOR_PINK 0xFFC0CB77
 #define COLOR_HUMAN 0x3366FF44
 #define COLOR_ZOMBIE 0xFF003344
 #define COLOR_RED 0xAA3333AA
 #define COLOR_YELLOW 0xFFFF00AA
-//REST OF ALL COLOURS
 #define COLOR_LIGHTBLUE 0x33CCFFAA
 #define COLOR_GREY 0xAFAFAFAA
 #define COLOR_BLUE 0x0000BBAA
@@ -234,6 +248,10 @@ enum
 #define COL_PINK           "{FF00EA}"
 #define COL_LIGHTBLUE      "{00C0FF}"
 #define COL_LGREEN         "{C9FFAB}"
+
+/*
+	Classes
+*/
 
 enum E_CLASS {
 	E_CLASS_NAME[16],
@@ -301,6 +319,10 @@ new const gZombieClass[][E_CLASS] = {
 	{"Tanker Zombie",	330000}
 };
 
+/*
+	Bomb and Shield
+*/
+
 enum E_BOMB {
 	E_BOMB_OBJECT,
 	E_BOMB_PLAYERID
@@ -313,6 +335,10 @@ enum E_SHIELD {
 };
 new gShields[MAX_SHIELDS][E_SHIELD];
 
+/*
+	Administrator Ranks
+*/
+
 new const gAdminRanks[][16] =  {
 	"Player",
 	"Trial Moderator",
@@ -322,8 +348,12 @@ new const gAdminRanks[][16] =  {
 	"Owner"
 };
 
+/*
+	Variables and Arrays
+*/
+
 new
-	// Server related timers
+	// Server related variables
 	DB: gSQL,
 	Text: gXPTD,
 	gTime,
@@ -334,8 +364,9 @@ new
 	gMapID,
 	gPlayersCount,
 	gGateObject,
+	playersAliveCount,
 
-	// Player timers
+	// Player related variables
 	pASK_Timer[MAX_PLAYERS],
 	Text3D: pVIPLabel[MAX_PLAYER_NAME],
 	Text3D: pAdminLabel[MAX_PLAYER_NAME];
@@ -348,8 +379,6 @@ new Text:Textdraw9;
 new Text:Textdraw10;
 new Text:Textdraw11;
 new Text:Textdraw12;
-// Variables
-new playersAliveCount;
 
 new smokegas[MAX_PLAYERS];
 
@@ -380,6 +409,10 @@ new Text:mytokens[MAX_PLAYERS];
 new Text:myrank[MAX_PLAYERS];
 new Text:ServerIntroOne[MAX_PLAYERS];
 new Text:ServerIntroTwo[MAX_PLAYERS];
+
+/*
+	Map Stats
+*/
 
 enum E_MAP_INFO {
 
@@ -424,6 +457,10 @@ enum E_MAP_INFO {
 };
 new Map[E_MAP_INFO];
 
+/*
+	Player Stats
+*/
+
 enum E_PLAYER_INFO {
 
 	// Stuff that is saved!
@@ -446,6 +483,7 @@ enum E_PLAYER_INFO {
 	
 	// - Class related content
 	pBombs,
+	pDoctorShield,
 	
 	// - Round related content
 	pRoundZombies,
@@ -476,15 +514,13 @@ enum E_PLAYER_INFO {
 	pDamageShotgunCoin,
 	pDamageDeagleCoin,
 	pDamageMP5Coin,
-	pDoctorShield,
 	Frozen,
 	Minigun,
 	pSpawned
 };
 new pInfo[MAX_PLAYERS][E_PLAYER_INFO];
 
-enum aname
-{
+enum aname { // ???? Needs to be worked
 	HighJumpScout,
 	HighJumpZombie,
 	StomperPushing,
@@ -501,8 +537,11 @@ enum aname
 }
 new Abilitys[MAX_PLAYERS][aname];
 
-new const gRandomMessages[][144] =
-{
+/*
+	Random Messages
+*/
+
+new const gRandomMessages[][144] = { // The variable was renamed!
 	"[{DC143C}SERVER{FFFFFF}]: Check the command /vip, to see information about the donation and features.",
 	"[{DC143C}SERVER{FFFFFF}]: Join our Community Forums: www.samp-zombieland.info, to see the latest News & Updates.",
 	"[{DC143C}SERVER{FFFFFF}]: Earn XP and Cash by killing your enemy team, or you can donate for getting more XP and Cash.",
@@ -513,6 +552,10 @@ new const gRandomMessages[][144] =
 	"[{DC143C}SERVER{FFFFFF}]: Interested to become part of our staff team? You can post your application at our forums!",
 	"[{DC143C}SERVER{FFFFFF}]: Do you enjoy playing? Then don't forget to add this server to your favorites! Also invite your friends."
 };
+
+/*
+	Ranks
+*/
 
 enum E_RANKS
 {
@@ -555,7 +598,9 @@ new const gRanks[][E_RANKS] =
 	{"Finalist",		7000}
 };
 
-forward Float:GetDistanceBetweenPlayers(p1,p2);
+/*
+	Main
+*/
 
 main() {
 	print("[main] "NAME"");
@@ -5227,8 +5272,8 @@ custom ZombieSetup2(playerid)
 	return 1;
 }
 
-public Float:GetDistanceBetweenPlayers(p1,p2)
-{
+forward Float:GetDistanceBetweenPlayers(p1,p2);
+public Float:GetDistanceBetweenPlayers(p1,p2) {
 	new Float:x1,Float:y1,Float:z1,Float:x2,Float:y2,Float:z2;
 	if (!IsPlayerConnected(p1) || !IsPlayerConnected(p2)) {
 		return -1.00;
@@ -5271,9 +5316,8 @@ custom IsPlayerInWater(playerid)
 GetTeamPlayersAlive(teamid) { // Modified by Logic_
 
 	new count;
-	for(new i; i < playersAliveCount; i++)
-	{
-		if (pInfo[i][pTeam] == teamid) count++;
+	foreach (new i : Player) {
+		if (pInfo[i][pTeam] == teamid) count ++;
 	}
 	return count;
 }
@@ -5431,8 +5475,7 @@ custom DefaultTextdraws()
 	TextDrawSetProportional(infos, 1);
 	TextDrawSetSelectable(infos, 0);
 
-	for(new i; i < MAX_PLAYERS; i ++)
-	{
+	for (new i; i < MAX_PLAYERS; i ++) {
 		Infected[i] = TextDrawCreate(2.000000, 1.000000, "~n~");
 		TextDrawBackgroundColor(Infected[i], 255);
 		TextDrawFont(Infected[i], 1);
@@ -5783,12 +5826,9 @@ custom setClass(playerid)
 
 function ScreamerClearAnim(i) return ClearAnimations(i);
 
-custom InfectPlayerStandard(playerid)
-{
-	if (pInfo[playerid][pTeam] == TEAM_HUMAN)
-	{
-		if (pInfo[playerid][IsPlayerInfected] == 0)
-		{
+custom InfectPlayerStandard(playerid) {
+	if (pInfo[playerid][pTeam] == TEAM_HUMAN) {
+		if (!pInfo[playerid][IsPlayerInfected]) {
 			pInfo[playerid][IsPlayerInfectedTimer] = SetTimerEx("StandardInfection",2000,1,"i",playerid);
 			SetPlayerColor(playerid,COLOR_PINK);
 			TextDrawShowForPlayer(playerid,Infected[playerid]);
@@ -5798,12 +5838,9 @@ custom InfectPlayerStandard(playerid)
 	return 1;
 }
 
-custom InfectPlayerMutated(playerid)
-{
-	if (pInfo[playerid][pTeam] == TEAM_HUMAN)
-	{
-		if (pInfo[playerid][IsPlayerInfected] == 0)
-		{
+custom InfectPlayerMutated(playerid) {
+	if (pInfo[playerid][pTeam] == TEAM_HUMAN) {
+		if (!pInfo[playerid][IsPlayerInfected]) {
 			pInfo[playerid][IsPlayerInfectedTimer] = SetTimerEx("MutatedInfection",1500,1,"i",playerid);
 			SetPlayerColor(playerid,COLOR_PINK);
 			TextDrawShowForPlayer(playerid,Infected[playerid]);
@@ -5932,7 +5969,7 @@ custom CheckToLevelOrRankUp(killerid) {
 		break;
 	}
 
-	if (previous_rank != i) {
+	if (previous_rank < i) { // if the player rank has increased!
 		new str[128];
 		format(str, sizeof str, "{D9B9DA} %s has ranked up to rank %s (%d).", GetPlayerNameEx(killerid), pInfo[killerid][pRank]);
 		SendClientMessageToAll(-1, str);
@@ -6056,7 +6093,7 @@ public RogueTimer(playerid) {
 	return 1;
 }
 
-custom GetPlayerClassName(playerid) { // Added by Logic_
+custom GetPlayerClassName(playerid) { // Added by Logic_ (NOTE: Needs to be modified to: GetPlayerClassName(playerid, class_name[]))
 	new str[16];
 	if (pInfo[playerid][pTeam] == TEAM_HUMAN) {
 		format(str, sizeof str, gHumanClass[pInfo[playerid][pClass]][E_CLASS_NAME]);
@@ -6070,9 +6107,9 @@ custom GetPlayerClassName(playerid) { // Added by Logic_
 
 custom CheckPlayerKillStreak(killerid) { // Added by Logic_
 	new
-		kills = pInfo[killerid][Killstreak];
+		kills = pInfo[killerid][Killstreak]; // storing the value of killstreak in a variable to avoid recalling it over and over again!
 
-	if (! (kills % 5)) {
+	if (! (kills % 5)) { // if the killstreak is multiple of 5
 		new
 			tokens = (kills / 5),
 			xp = (kills * 2),
