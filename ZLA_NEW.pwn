@@ -2,9 +2,9 @@
 	Zombieland ~ Version 1 Build 5
 	
 	Mode: Game mode/ TDM/ Zombie TDM/ Survival
-	Written from: Edit
+	Project type: Edit
 	
-	Authors: Sjutel, Kitten, Logic_, Private200 and others who contributed to this amazing project!
+	Authors: Erwin (formerly, Sjutel), Kitten, Logic_, Private200 and others who contributed to this amazing project!
 */
 
 #include	<a_samp>
@@ -28,8 +28,6 @@
 #define		function%0(%1)				\
 			forward %0(%1);\
 			public %0(%1)
-
-#define		custom
 
 #define		NON_IMMUNE					311
 #define		MAX_MAPTIME					250
@@ -655,7 +653,7 @@ function StartMap()
 }
 
 //ROUND END TEXTDRAW STATISCTICS
-custom LoadTextdraws()
+LoadTextdraws()
 {
 	Textdraw7 = TextDrawCreate(508.823547, 109.416671, "usebox");
 	TextDrawLetterSize(Textdraw7, 0.000000, 26.192592);
@@ -726,7 +724,7 @@ custom LoadTextdraws()
 
 function No_Maps() return SendRconCommand("exit");
 
-custom LoadNewMap()
+LoadNewMap()
 {
 	gMapID %= MAX_MAPS;
 	gMapID ++;
@@ -780,7 +778,7 @@ function EndMap(playerid)
 
 function OnMapUpdate()
 {
-	gTime-= 1;
+	gTime -= 1;
 
 	foreach(new i : Player)
 	{
@@ -956,7 +954,7 @@ public OneSecondUpdate() {
 	return 1;
 }
 
-custom UpdateKillStatsTD(playerid)
+UpdateKillStatsTD(playerid)
 {	
 	UpdateKillsTextdraw(playerid);
 	UpdateDeathsTextdraw(playerid);
@@ -2183,7 +2181,7 @@ public OnPlayerText(playerid, text[]) { // Updated by Logic_
 	return 0;
 }
 
-custom PlantBomb(playerid) { // A completely new bomb system made from Scratch by Logic_
+PlantBomb(playerid) { // A completely new bomb system made from Scratch by Logic_
 	if (!pInfo[playerid][pBombs]) return NotifyPlayer(playerid, "~r~You don't have any bombs left.");
 
 	new Float: x, Float: y, Float: z, string[40];
@@ -2205,7 +2203,7 @@ custom PlantBomb(playerid) { // A completely new bomb system made from Scratch b
 	return 1;
 }
 
-custom TerroristBomb() {
+TerroristBomb() {
 	new i, Float: distance, Float: x, Float: y, Float: z;
 
 	for (; i < MAX_BOMBS; i++) {
@@ -2235,7 +2233,7 @@ custom TerroristBomb() {
 	return 1;
 }
 
-custom GetFreeBombID() {
+GetFreeBombID() {
 	for (new i; i < MAX_BOMBS; i++) {
 		if (gBomb[i][E_BOMB_PLAYERID] != INVALID_PLAYER_ID) continue;
 
@@ -2245,7 +2243,7 @@ custom GetFreeBombID() {
 	return -1;
 }
 
-custom ResetBombs() {
+ResetBombs() {
 	for (new i; i < MAX_BOMBS; i++) {
 		gBomb[i][E_BOMB_PLAYERID] = INVALID_PLAYER_ID;
 
@@ -2256,7 +2254,7 @@ custom ResetBombs() {
 	return 1;
 }
 
-custom GetFreeShieldID() { // Completely new scratch written Shield system by Logic_
+GetFreeShieldID() { // Completely new scratch written Shield system by Logic_
 	for (new i; i < MAX_SHIELDS; i++) {
 		if (gShields[i][E_SHIELD_PLAYERID] != INVALID_PLAYER_ID) continue;
 
@@ -2265,7 +2263,7 @@ custom GetFreeShieldID() { // Completely new scratch written Shield system by Lo
 	return -1;
 }
 
-custom PlantShield(playerid) {
+PlantShield(playerid) {
 	if (!pInfo[playerid][pDoctorShield]) return NotifyPlayer(playerid, "~r~You don't have any shields left.");
 
 	new Float:pz, Float:x, Float:y, Float:z, string[40];
@@ -2288,7 +2286,7 @@ custom PlantShield(playerid) {
 	return 1;
 }
 
-custom ResetShields() {
+ResetShields() {
 	for (new i; i < MAX_SHIELDS; i++) {
 		gShields[i][E_SHIELD_PLAYERID] = INVALID_PLAYER_ID;
 
@@ -2298,7 +2296,7 @@ custom ResetShields() {
 	return 1;
 }
 
-custom DoctorShield() {
+DoctorShield() {
 
 	new i, Float: distance, Float: x, Float: y, Float: z, Float: health;
 
@@ -2705,7 +2703,7 @@ public OnVehicleMod(playerid, vehicleid, componentid) {
 	return 0;
 }
 
-custom GetPlayerSpeedSpeedo(playerid, bool:kmh) {
+GetPlayerSpeedSpeedo(playerid, bool:kmh) {
 	new Float:Vx, Float:Vy, Float:Vz, Float:rtn;
 	if (IsPlayerInAnyVehicle(playerid)) GetVehicleVelocity(GetPlayerVehicleID(playerid),Vx,Vy,Vz);
 	else GetPlayerVelocity(playerid,Vx,Vy,Vz);
@@ -4939,13 +4937,13 @@ LoadAccount(playerid)
 	return 1;
 }
 
-custom ClearChat()
+ClearChat()
 {
 	for(new a = 0; a < 129; a++) SendClientMessageToAll(-1, " ");
 	return 1;
 }
 
-custom ResetVars(playerid)
+ResetVars(playerid)
 {
 	CurePlayer(playerid);
 	KillTimer(pInfo[playerid][IsPlayerInfectedTimer]);
@@ -4959,7 +4957,7 @@ custom ResetVars(playerid)
 	return 1;
 }
 
-custom ResetCoinVars(playerid)
+ResetCoinVars(playerid)
 {
 	pInfo[playerid][pKickBackCoin] = 0;
 	pInfo[playerid][pDamageShotgunCoin] = 0;
@@ -4968,7 +4966,7 @@ custom ResetCoinVars(playerid)
 	return 1;
 }
 
-custom ConnectVars(playerid)
+ConnectVars(playerid)
 {
 	TextDrawShowForPlayer(playerid, ServerIntroOne[playerid]);
 	TextDrawShowForPlayer(playerid, ServerIntroTwo[playerid]);
@@ -5000,7 +4998,7 @@ CMD:unban(playerid, params[]) {
 	return 1;
 }
 
-custom BanPlayer(playerid, reason[], adminid) {
+BanPlayer(playerid, reason[], adminid) {
 	new
 		string[500],
 		query[56 + MAX_PLAYER_NAME + MAX_REASON_LEN],
@@ -5033,7 +5031,7 @@ custom BanPlayer(playerid, reason[], adminid) {
 	return KickPlayer(playerid);
 }
 
-custom UnbanPlayer(name[]) {
+UnbanPlayer(name[]) {
 	new query[38 + MAX_PLAYER_NAME];
 
 	format(query, sizeof query, "DELETE FROM "#TABLE_BANS" WHERE `Name` = '%q'", name);
@@ -5041,7 +5039,7 @@ custom UnbanPlayer(name[]) {
 	return 1;
 }
 
-custom CheckBan(name[]) {
+CheckBan(name[]) {
 	new query[48 + MAX_PLAYER_NAME], DBResult: result, num_rows;
 
 	format(query, sizeof query, "SELECT * FROM "#TABLE_BANS" WHERE `Name` = '%q' LIMIT 1", name);
@@ -5064,7 +5062,7 @@ GetXYInFrontOfPlayer(playerid, &Float:x, &Float:y, Float:distance)
 	y += (distance * floatcos(-a, degrees));
 }
 
-custom SetPlayerPosEx( playerid, Float: posx, Float: posy, Float: posz, interior, virtualworld )
+SetPlayerPosEx( playerid, Float: posx, Float: posy, Float: posz, interior, virtualworld )
 {
 	if (GetPlayerState(playerid) == 2) {
 		SetPlayerVirtualWorld( playerid, virtualworld );
@@ -5082,7 +5080,7 @@ custom SetPlayerPosEx( playerid, Float: posx, Float: posy, Float: posz, interior
 	}
 }
 
-custom SendMessageToAdmins(message[], color)
+SendMessageToAdmins(message[], color)
 {
 	foreach(new i : Player)
 	{
@@ -5094,7 +5092,7 @@ custom SendMessageToAdmins(message[], color)
 	return 1;
 }
 
-custom SendMessageToAllVips(message[], color)
+SendMessageToAllVips(message[], color)
 {
 	foreach(new i : Player)
 	{
@@ -5106,7 +5104,7 @@ custom SendMessageToAllVips(message[], color)
 	return 1;
 }
 
-custom SendZMessage(message[], color)
+SendZMessage(message[], color)
 {
 	foreach(new i : Player)
 	{
@@ -5118,7 +5116,7 @@ custom SendZMessage(message[], color)
 	return 1;
 }
 
-custom SendHMessage(message[], color)
+SendHMessage(message[], color)
 {
 	foreach(new i : Player)
 	{
@@ -5130,7 +5128,7 @@ custom SendHMessage(message[], color)
 	return 1;
 }
 
-custom SendXPError(playerid,xp)
+SendXPError(playerid,xp)
 {
 	new string[128];
 	format(string, sizeof string,""chat""COL_PINK" {CA97CA}You need atleast {FFD700}%i XP{CA97CA}, to use this class or command.",xp);
@@ -5138,7 +5136,7 @@ custom SendXPError(playerid,xp)
 	return 1;
 }
 
-custom SendCoinError(playerid,coin)
+SendCoinError(playerid,coin)
 {
 	new string[128];
 	format(string, sizeof string,""chat""COL_PINK" {CA97CA}You need {FFD700}%i Tokens{CA97CA}, to use this feature.",coin);
@@ -5146,7 +5144,7 @@ custom SendCoinError(playerid,coin)
 	return 1;
 }
 
-custom SendVipError(playerid,viplevel)
+SendVipError(playerid,viplevel)
 {
 	new string[128];
 	format(string, sizeof string,""chat""COL_PINK" {CA97CA}You need to be higher level {FFD700}VIP{CA97CA}, to use this command.",viplevel);
@@ -5154,7 +5152,7 @@ custom SendVipError(playerid,viplevel)
 	return 1;
 }
 
-custom LoadMap(mapid) { // Re-written by Logic_
+LoadMap(mapid) { // Re-written by Logic_
 	new query[60], DBResult: result;
 	format(query, sizeof query, "SELECT * FROM "TABLE_MAPS" WHERE "FIELD_MAP_ID" = %d", gMaps[mapid]);
 	result = db_query(gSQL, query);
@@ -5213,7 +5211,7 @@ custom LoadMap(mapid) { // Re-written by Logic_
 	return 0;
 }
 
-custom ClearObjects()
+ClearObjects()
 {
 	for(new i; i<MAX_OBJECTS; i++)
 	{
@@ -5221,7 +5219,7 @@ custom ClearObjects()
 	}
 }
 
-custom DestroyAllVehicle()
+DestroyAllVehicle()
 {
 	for(new i=1;i<=MAX_VEHICLES;i++)
 	{
@@ -5230,7 +5228,7 @@ custom DestroyAllVehicle()
 	return 1;
 }
 
-custom LoadFilterScript(filename[])
+LoadFilterScript(filename[])
 {
 	new string[50];
 	format(string, sizeof string, "loadfs %s", filename);
@@ -5238,7 +5236,7 @@ custom LoadFilterScript(filename[])
 	return 1;
 }
 
-custom UnloadFilterScript(filename[])
+UnloadFilterScript(filename[])
 {
 	new string[50];
 	format(string, sizeof string, "unloadfs %s", filename);
@@ -5246,7 +5244,7 @@ custom UnloadFilterScript(filename[])
 	return 1;
 }
 
-custom HumanSetup(playerid)
+HumanSetup(playerid)
 {
 	SetPlayerTeam(playerid,TEAM_HUMAN);
 	SetPlayerHealth(playerid,100.0);
@@ -5255,7 +5253,7 @@ custom HumanSetup(playerid)
 	return 1;
 }
 
-custom ZombieSetup(playerid)
+ZombieSetup(playerid)
 {
 	SetPlayerTeam(playerid,TEAM_ZOMBIE);
 	pInfo[playerid][pTeam] = TEAM_ZOMBIE;
@@ -5263,7 +5261,7 @@ custom ZombieSetup(playerid)
 	return 1;
 }
 
-custom ZombieSetup2(playerid)
+ZombieSetup2(playerid)
 {
 	SetPlayerTeam(playerid,TEAM_ZOMBIE);
 	pInfo[playerid][pTeam] = TEAM_ZOMBIE;
@@ -5283,7 +5281,7 @@ public Float:GetDistanceBetweenPlayers(p1,p2) {
 	return floatsqroot(floatpower(floatabs(floatsub(x2,x1)),2)+floatpower(floatabs(floatsub(y2,y1)),2)+floatpower(floatabs(floatsub(z2,z1)),2));
 }
 
-custom GetClosestPlayer(playerid)
+GetClosestPlayer(playerid)
 {
 	new
 		lookupid = INVALID_PLAYER_ID,
@@ -5305,7 +5303,7 @@ custom GetClosestPlayer(playerid)
 	return lookupid;
 }
 
-custom IsPlayerInWater(playerid)
+IsPlayerInWater(playerid)
 {
 	new animlib[32],tmp[32];
 	GetAnimationName(GetPlayerAnimationIndex(playerid),animlib,32,tmp,32);
@@ -5322,7 +5320,7 @@ GetTeamPlayersAlive(teamid) { // Modified by Logic_
 	return count;
 }
 
-custom EvenTeam() { // Modified by Logic_
+EvenTeam() { // Modified by Logic_
 
 	new count = Iter_Count(Player), number = (count % 2);
 
@@ -5338,7 +5336,7 @@ custom EvenTeam() { // Modified by Logic_
 	}
 }
 
-custom DefaultTextdraws()
+DefaultTextdraws()
 {
 	TimeLeft = TextDrawCreate(540.000000, 37.000000, "0:00");
 	TextDrawBackgroundColor(TimeLeft, 68);
@@ -5554,14 +5552,14 @@ custom DefaultTextdraws()
 	return 1;
 }
 
-custom UpdateAliveInfo() { // Modified by Logic_
+UpdateAliveInfo() { // Modified by Logic_
 	new string[50];
 	format(string, sizeof string, "~r~%d~w~ ZOMBIES ~w~VS~w~ HUMANS ~b~%d", GetTeamPlayersAlive(TEAM_ZOMBIE), GetTeamPlayersAlive(TEAM_HUMAN));
 	
 	return TextDrawSetString(AliveInfo,string), 1;
 }
 
-custom UpdateXPTextdraw(playerid) { // Modified by Logic_
+UpdateXPTextdraw(playerid) { // Modified by Logic_
 	
 	new string[24];
 	format(string, sizeof string, "XP: %i",pInfo[playerid][pXP]);
@@ -5569,7 +5567,7 @@ custom UpdateXPTextdraw(playerid) { // Modified by Logic_
 	return 1;
 }
 
-custom UpdateKillsTextdraw(playerid) { // Modified by Logic_
+UpdateKillsTextdraw(playerid) { // Modified by Logic_
 
 	new string[24];
 	format(string, sizeof string, "Kills: %i",pInfo[playerid][pKills]);
@@ -5577,7 +5575,7 @@ custom UpdateKillsTextdraw(playerid) { // Modified by Logic_
 	return 1;
 }
 
-custom UpdateDeathsTextdraw(playerid) { // Modified by Logic_
+UpdateDeathsTextdraw(playerid) { // Modified by Logic_
 
 	new string[24];
 	format(string, sizeof string, "Deaths: %i", pInfo[playerid][pDeaths]);
@@ -5585,7 +5583,7 @@ custom UpdateDeathsTextdraw(playerid) { // Modified by Logic_
 	return 1;
 }
 
-custom UpdateKDTextdraw(playerid) { // Modified by Logic_
+UpdateKDTextdraw(playerid) { // Modified by Logic_
 
 	new string[24], Float:kd = floatdiv(pInfo[playerid][pKills], pInfo[playerid][pDeaths]);
 	format(string, sizeof string, "K/D: %0.2f", kd);
@@ -5593,7 +5591,7 @@ custom UpdateKDTextdraw(playerid) { // Modified by Logic_
 	return 1;
 }
 
-custom UpdateTokensTextdraw(playerid) { // Modified by Logic_
+UpdateTokensTextdraw(playerid) { // Modified by Logic_
 
 	new string[24];
 	format(string, sizeof string, "Tokens: %i",pInfo[playerid][pCoins]);
@@ -5601,7 +5599,7 @@ custom UpdateTokensTextdraw(playerid) { // Modified by Logic_
 	return 1;
 }
 
-custom UpdateRanksTextdraw(playerid) { // Modified by Logic_
+UpdateRanksTextdraw(playerid) { // Modified by Logic_
 
 	new string[20];
 	format(string, sizeof string, "Rank: %i/%i", pInfo[playerid][pRank], sizeof gRanks);
@@ -5609,7 +5607,7 @@ custom UpdateRanksTextdraw(playerid) { // Modified by Logic_
 	return 1;
 }
 
-custom UpdateMapName() { // Modified by Logic_
+UpdateMapName() { // Modified by Logic_
 
 	new string[10 + MAX_MAP_NAME_LEN];
 	format(string, sizeof string, "Map: ~w~%s", Map[MapName]);
@@ -5617,7 +5615,7 @@ custom UpdateMapName() { // Modified by Logic_
 	return 1;
 }
 
-custom setClass(playerid)
+setClass(playerid)
 {
 	if (pInfo[playerid][pTeam] == TEAM_HUMAN)
 	{
@@ -5826,7 +5824,7 @@ custom setClass(playerid)
 
 function ScreamerClearAnim(i) return ClearAnimations(i);
 
-custom InfectPlayerStandard(playerid) {
+InfectPlayerStandard(playerid) {
 	if (pInfo[playerid][pTeam] == TEAM_HUMAN) {
 		if (!pInfo[playerid][IsPlayerInfected]) {
 			pInfo[playerid][IsPlayerInfectedTimer] = SetTimerEx("StandardInfection",2000,1,"i",playerid);
@@ -5838,7 +5836,7 @@ custom InfectPlayerStandard(playerid) {
 	return 1;
 }
 
-custom InfectPlayerMutated(playerid) {
+InfectPlayerMutated(playerid) {
 	if (pInfo[playerid][pTeam] == TEAM_HUMAN) {
 		if (!pInfo[playerid][IsPlayerInfected]) {
 			pInfo[playerid][IsPlayerInfectedTimer] = SetTimerEx("MutatedInfection",1500,1,"i",playerid);
@@ -5850,7 +5848,7 @@ custom InfectPlayerMutated(playerid) {
 	return 1;
 }
 
-custom InfectPlayerFleshEater(playerid)
+InfectPlayerFleshEater(playerid)
 {
 	if (pInfo[playerid][pTeam] == TEAM_HUMAN)
 	{
@@ -5865,7 +5863,7 @@ custom InfectPlayerFleshEater(playerid)
 	return 1;
 }
 
-custom CurePlayer(playerid)
+CurePlayer(playerid)
 {
 	if (pInfo[playerid][IsPlayerInfected] == 1)
 	{
@@ -5907,7 +5905,7 @@ function FleshEaterInfection(playerid)
 	return 1;
 }
 
-custom CheckToStartMap()
+CheckToStartMap()
 {
 	if (Map[IsStarted] == 0)
 	{
@@ -5918,7 +5916,7 @@ custom CheckToStartMap()
 	return 1;
 }
 
-custom ChangeCameraView(playerid)
+ChangeCameraView(playerid)
 {
 	new Float:px,Float:py,Float:pz,Float:pa;
 	GetPlayerPos(playerid, px, py, pz);
@@ -5928,7 +5926,7 @@ custom ChangeCameraView(playerid)
 	return 1;
 }
 
-custom SendPlayerMaxAmmo( playerid )
+SendPlayerMaxAmmo( playerid )
 {
 	new slot, weap, ammo;
 
@@ -5941,13 +5939,13 @@ custom SendPlayerMaxAmmo( playerid )
 	return 1;
 }
 
-custom IsValidWeapon( weaponid )
+IsValidWeapon( weaponid )
 {
 	if ( weaponid > 0 && weaponid < 19 || weaponid > 21 && weaponid < 47 ) return 1;
 	return 0;
 }
 
-custom GetXPName() { // Modified by Logic_
+GetXPName() { // Modified by Logic_
 	new str[11];
 	switch (Map[XPType]) {
 		case 1: str = "Normal XP";
@@ -5958,7 +5956,7 @@ custom GetXPName() { // Modified by Logic_
 	return str;
 }
 
-custom CheckToLevelOrRankUp(killerid) {
+CheckToLevelOrRankUp(killerid) {
 	new
 		i = sizeof gRanks, previous_rank = pInfo[killerid][pRank];
 	
@@ -5983,14 +5981,14 @@ function HideiKilled(playerid) {
 	return TextDrawHideForPlayer(playerid, iKilled[playerid]), 1;
 }
 
-custom SpawnVars(playerid) {
+SpawnVars(playerid) {
 	TextDrawHideForPlayer(playerid, ServerIntroOne[playerid]);
 	TextDrawHideForPlayer(playerid, ServerIntroTwo[playerid]);
 	ShowTextdrawsAfterConnect(playerid);
 	return 1;
 }
 
-custom ShowTextdrawsAfterConnect(playerid) {
+ShowTextdrawsAfterConnect(playerid) {
 	TextDrawShowForPlayer(playerid, TimeLeft);
 	TextDrawShowForPlayer(playerid, UntilRescue);
 	TextDrawShowForPlayer(playerid, AliveInfo);
@@ -6013,7 +6011,7 @@ custom ShowTextdrawsAfterConnect(playerid) {
 	return 1;
 }
 
-custom hideTextdrawsAfterConnect(playerid) {
+hideTextdrawsAfterConnect(playerid) {
 	TextDrawHideForPlayer(playerid, TimeLeft);
 	TextDrawHideForPlayer(playerid, UntilRescue);
 	TextDrawHideForPlayer(playerid, AliveInfo);
@@ -6093,7 +6091,7 @@ public RogueTimer(playerid) {
 	return 1;
 }
 
-custom GetPlayerClassName(playerid) { // Added by Logic_ (NOTE: Needs to be modified to: GetPlayerClassName(playerid, class_name[]))
+GetPlayerClassName(playerid) { // Added by Logic_ (NOTE: Needs to be modified to: GetPlayerClassName(playerid, class_name[]))
 	new str[16];
 	if (pInfo[playerid][pTeam] == TEAM_HUMAN) {
 		format(str, sizeof str, gHumanClass[pInfo[playerid][pClass]][E_CLASS_NAME]);
@@ -6105,7 +6103,7 @@ custom GetPlayerClassName(playerid) { // Added by Logic_ (NOTE: Needs to be modi
 	return str;
 }
 
-custom CheckPlayerKillStreak(killerid) { // Added by Logic_
+CheckPlayerKillStreak(killerid) { // Added by Logic_
 	new
 		kills = pInfo[killerid][Killstreak]; // storing the value of killstreak in a variable to avoid recalling it over and over again!
 
