@@ -1121,11 +1121,12 @@ public OnPlayerConnect(playerid)
 
 CheckPlayerAccount(playerid) {
 	
-	new query[128], DBResult: result;
-	format(query, sizeof query, "SELECT "FIELD_PASSWORD", "FIELD_ID" FROM "TABLE_USERS" WHERE "FIELD_NAME" = '%q'", GetPlayerNameEx(playerid));
+	new query[140], DBResult: result;
+	format(query, sizeof query, "SELECT "FIELD_PASSWORD", "FIELD_ID" FROM "TABLE_USERS" WHERE "FIELD_NAME" = '%q' LIMIT 1", GetPlayerNameEx(playerid));
 	result = db_query(gSQL, query);
 
 	if (db_num_rows(result)) {
+		
 		db_get_field_assoc(result, FIELD_PASSWORD, pInfo[playerid][pPassword], MAX_PASSWORD_LEN);
 		pInfo[playerid][pID] = db_get_field_assoc_int(result, FIELD_ID);
 
@@ -1322,7 +1323,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 				return ShowPlayerDialog(playerid, DIALOG_REGISTER, DIALOG_STYLE_PASSWORD, "Zombieland :: Register", ""chat" Our system has detected your username is not registered, please register to continue:", "Register", "Quit");
 			}
 			
-			new IP[16], query[224], DBResult: result;
+			new IP[16], query[230], DBResult: result;
 			GetPlayerIp(playerid, IP, sizeof IP);
 			SHA256_PassHash(inputtext, PASSWORD_SALT, pInfo[playerid][pPassword], MAX_PASSWORD_LEN);
 
