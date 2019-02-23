@@ -66,31 +66,31 @@
 #define		MAX_MAP_NAME_LEN			30 // Maximum map name
 
 #define		TABLE_BANS					"`Bans`"
-#define		FIELD_BAN_ID				"ID"
-#define		FIELD_BANNAME				"Name"
-#define		FIELD_BANREASON				"Reason"
+#define		FIELD_BAN_ID				"`ID`"
+#define		FIELD_BANNAME				"`Name`"
+#define		FIELD_BANREASON				"`Reason`"
 
 #define 	TABLE_USERS					"`Users`"
-#define		FIELD_ID					"ID"
-#define		FIELD_NAME					"Name"
-#define		FIELD_PASSWORD				"Password"
-#define		FIELD_IP					"IP"
-#define		FIELD_CASH					"Cash"
-#define		FIELD_XP					"XP"
-#define		FIELD_KILLS					"Kills"
-#define		FIELD_DEATHS				"Deaths"
-#define		FIELD_HEADS					"Heads"
-#define		FIELD_EVAC					"Evac"
-#define		FIELD_RANK					"Rank"
-#define		FIELD_ADMIN					"Admin"
-#define		FIELD_VIP					"VIP"
-#define		FIELD_TIME					"Time"
-#define		FIELD_MAPS					"Maps"
-#define		FIELD_COINS					"Coins"
-#define		FIELD_KICKBACK				"Kickback" // New additions in Build 4
-#define		FIELD_DMGDEAGLE				"DamageDeagle" // New additions in Build 4
-#define		FIELD_DMGSHOTGUN			"DamageShotgun" // New additions in Build 4
-#define		FIELD_DMGMP5				"DamageMP5" // New additions in Build 4
+#define		FIELD_ID					"`ID`"
+#define		FIELD_NAME					"`Name`"
+#define		FIELD_PASSWORD				"`Password`"
+#define		FIELD_IP					"`IP`"
+#define		FIELD_CASH					"`Cash`"
+#define		FIELD_XP					"`XP`"
+#define		FIELD_KILLS					"`Kills`"
+#define		FIELD_DEATHS				"`Deaths`"
+#define		FIELD_HEADS					"`Heads`"
+#define		FIELD_EVAC					"`Evac`"
+#define		FIELD_RANK					"`Rank`"
+#define		FIELD_ADMIN					"`Admin`"
+#define		FIELD_VIP					"`VIP`"
+#define		FIELD_TIME					"`Time`"
+#define		FIELD_MAPS					"`Maps`"
+#define		FIELD_COINS					"`Coins`"
+#define		FIELD_KICKBACK				"`Kickback`" // New additions in Build 4
+#define		FIELD_DMGDEAGLE				"`DamageDeagle`" // New additions in Build 4
+#define		FIELD_DMGSHOTGUN			"`DamageShotgun`" // New additions in Build 4
+#define		FIELD_DMGMP5				"`DamageMP5`" // New additions in Build 4
 
 #define		TABLE_MAPS					"`Maps`"
 #define		FIELD_MAP_ID				"ID"
