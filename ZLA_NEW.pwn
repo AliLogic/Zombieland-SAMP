@@ -1843,6 +1843,8 @@ public OnPlayerDeath(playerid, killerid, reason)
 {
 	SendDeathMessage(killerid, playerid, reason);
 
+	pInfo[playerid][pTeam] = TEAM_ZOMBIE;
+
 	if (killerid != INVALID_PLAYER_ID)
 	{
 		pInfo[killerid][pKills]++;
@@ -1856,88 +1858,24 @@ public OnPlayerDeath(playerid, killerid, reason)
 			case TEAM_HUMAN: pInfo[killerid][pRoundZombies]++;
 		}
 
-		switch (Map[XPType])
-		{
-			case 1:
-			{
-				switch (random(2))
-				{
-					case 0: GivePlayerXP(killerid,10),GivePlayerMoney(killerid,1000),pInfo[killerid][pCash] +=1000,GameTextForPlayer(killerid,"~n~~n~~n~~n~~n~~y~+10 XP ~n~~g~+1000$",3500,5);
-					case 1: GivePlayerXP(killerid,20),GivePlayerMoney(killerid,1200),pInfo[killerid][pCash] +=1200,GameTextForPlayer(killerid,"~n~~n~~n~~n~~n~~y~+20 XP ~n~~g~+1200$",3500,5);
-				}
-			}
+		new gunname[32],
+			string[100],
+			xp_type = Map[XPType],
+			player_xp = 10 * xp_type,
+			player_money = 1000 * xp_type;
 
-			case 2:
-			{
-				switch (random(2))
-				{
-					case 0: GivePlayerXP(killerid,20),GivePlayerMoney(killerid,1200),pInfo[killerid][pCash] +=1200,GameTextForPlayer(killerid,"~n~~n~~n~~n~~n~~y~+20 XP ~n~~g~+1200$",3500,5);
-					case 1: GivePlayerXP(killerid,30),GivePlayerMoney(killerid,1300),pInfo[killerid][pCash] +=1300,GameTextForPlayer(killerid,"~n~~n~~n~~n~~n~~y~+30 XP ~n~~g~+1300$",3500,5);
-				}
-			}
+		if (pInfo[killerid][pVipLevel]) {
 
-			case 3:
-			{
-				switch (random(2))
-				{
-					case 0: GivePlayerXP(killerid,30),GivePlayerMoney(killerid,1300),pInfo[killerid][pCash] +=1300,GameTextForPlayer(killerid,"~n~~n~~n~~n~~n~~y~+30 XP ~n~~g~+1300$",3500,5);
-					case 1: GivePlayerXP(killerid,40),GivePlayerMoney(killerid,1400),pInfo[killerid][pCash] +=1400,GameTextForPlayer(killerid,"~n~~n~~n~~n~~n~~y~+40 XP ~n~~g~+1400$",3500,5);
-				}
-			}
-
-			case 4:
-			{
-				switch (random(2))
-				{
-					case 0: GivePlayerXP(killerid,40),GivePlayerMoney(killerid,1400),pInfo[killerid][pCash] +=1400,GameTextForPlayer(killerid,"~n~~n~~n~~n~~n~~y~+40 XP ~n~~g~+1400$",3500,5);
-					case 1: GivePlayerXP(killerid,50),GivePlayerMoney(killerid,1500),pInfo[killerid][pCash] +=1500,GameTextForPlayer(killerid,"~n~~n~~n~~n~~n~~y~+50 XP ~n~~g~+1500$",3500,5);
-				}
-			}
+			player_xp += 5;
+			player_money += 250;
 		}
 
-		if (pInfo[killerid][pVipLevel] >= 1)
-		{
-			switch (Map[XPType])
-			{
-				case 1:
-				{
-					switch (random(2))
-					{
-						case 0: GivePlayerXP(killerid,15),GivePlayerMoney(killerid,1500),pInfo[killerid][pCash] +=1500,SendClientMessage(killerid,-1,""chat" Earned 15 XP + 1500$ from VIP!");
-						case 1: GivePlayerXP(killerid,25),GivePlayerMoney(killerid,2500),pInfo[killerid][pCash] +=2500,SendClientMessage(killerid,-1,""chat" Earned 25 XP + 2500$ from VIP!");
-					}
-				}
+		format(string, sizeof string, "~n~~n~~n~~n~~n~~y~+%i XP ~n~~g~+$%i", player_xp, player_money);
+		GameTextForPlayer(killerid, string, 3000, 5);
 
-				case 2:
-				{
-					switch (random(2))
-					{
-						case 0: GivePlayerXP(killerid,25),GivePlayerMoney(killerid,2500),pInfo[killerid][pCash] +=2500,SendClientMessage(killerid,-1,""chat" Earned 25 XP + 2500$ from VIP!");
-						case 1: GivePlayerXP(killerid,35),GivePlayerMoney(killerid,3500),pInfo[killerid][pCash] +=3500,SendClientMessage(killerid,-1,""chat" Earned 35 XP + 3500$ from VIP!");
-					}
-				}
+		GivePlayerXP(killerid, player_xp);
+		GivePlayerMoney(killerid, player_money);
 
-				case 3:
-				{
-					switch (random(2))
-					{
-						case 0: GivePlayerXP(killerid,35),GivePlayerMoney(killerid,3500),pInfo[killerid][pCash] +=3500,SendClientMessage(killerid,-1,""chat" Earned 35 XP + 3500$ from VIP!");
-						case 1: GivePlayerXP(killerid,45),GivePlayerMoney(killerid,4500),pInfo[killerid][pCash] +=4500,SendClientMessage(killerid,-1,""chat" Earned 45 XP + 4500$ from VIP!");
-					}
-				}
-
-				case 4:
-				{
-					switch (random(2))
-					{
-						case 0: GivePlayerXP(killerid,55),GivePlayerMoney(killerid,5500),pInfo[killerid][pCash] +=5500,SendClientMessage(killerid,-1,""chat" Earned 55 XP + 5500$ from VIP!");
-						case 1: GivePlayerXP(killerid,65),GivePlayerMoney(killerid,6500),pInfo[killerid][pCash] +=6500,SendClientMessage(killerid,-1,""chat" Earned 65 XP + 6500$ from VIP!");
-					}
-				}
-			}
-		}
-
-		new string[128], gunname[32];
 		GetWeaponName(reason, gunname, sizeof gunname);
 		format(string, sizeof string,"You have killed~r~ %s~w~ with an %s", GetPlayerNameEx(playerid), gunname);
 		TextDrawSetString(iKilled[killerid],string);
@@ -1959,8 +1897,6 @@ public OnPlayerDeath(playerid, killerid, reason)
 	pInfo[playerid][pRoundDeaths]++;
 	pInfo[playerid][pDeaths] ++;
 	pInfo[playerid][Killstreak] = pInfo[playerid][Minigun] = 0;
-
-	pInfo[playerid][pTeam] = TEAM_ZOMBIE;
 
 	KillTimer(pInfo[playerid][IsPlayerInfectedTimer]);
 	if (pInfo[playerid][IsPlayerInfected] == 1) CurePlayer(playerid);
@@ -1984,7 +1920,6 @@ public OnPlayerDeath(playerid, killerid, reason)
 		
 		foreach(new i : Player)
 		{
-			GetClosestPlayer(i);
 			if (GetPlayerSkin(i) == NON_IMMUNE)
 			{
 				if (IsPlayerInRangeOfPoint(i,7.0,Float:x,Float:y,Float:z))
