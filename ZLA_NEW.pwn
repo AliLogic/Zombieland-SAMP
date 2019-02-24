@@ -1202,24 +1202,10 @@ public OnPlayerDisconnect(playerid, reason) {
 	return 1;
 }
 
-forward EndAntiSpawnKill(playerid);
-public OnPlayerSpawn(playerid)
-{
-	TextDrawHideForPlayer(playerid, Textdraw7);
-	TextDrawHideForPlayer(playerid, Textdraw8);
-	TextDrawHideForPlayer(playerid, Textdraw9);
-	TextDrawHideForPlayer(playerid, Textdraw10);
-	TextDrawHideForPlayer(playerid, Textdraw11);
-	TextDrawHideForPlayer(playerid, Textdraw12);
+public OnPlayerSpawn(playerid) {
 
 	pInfo[playerid][pSpawned] = 1;
 	pInfo[playerid][Minigun] = 0;
-	UpdateKillsTextdraw(playerid);
-	UpdateDeathsTextdraw(playerid);
-	UpdateKDTextdraw(playerid);
-	UpdateTokensTextdraw(playerid);
-	UpdateRanksTextdraw(playerid);
-	ShowPlayerDialog(playerid, DIALOG_WEAPONS_SHOP, DIALOG_STYLE_LIST, "{FFFFFF}SHOP", "Weapons\nSkins\nClasses\nToken Shop\nPerks", "Select", "Close");
 
 	if (IsSpecing[playerid] == 1) {
 
@@ -1252,18 +1238,35 @@ public OnPlayerSpawn(playerid)
 	else {
 
 		playersAliveCount++;
+		SetPlayerInterior(playerid, Map[Interior]);
 		CheckToStartMap();
-		SetPlayerInterior(playerid,Map[Interior]);
 
-		SetPlayerHealth(playerid, 99999);
-		pASK_Timer[playerid] = SetTimerEx("EndAntiSpawnKill", 5000, false, "i", playerid);
+		switch (pInfo[playerid][pTeam]) {
 
-		if (pInfo[playerid][pTeam] == TEAM_ZOMBIE)
-		{
-			ZombieSetup(playerid);
-			SetPlayerPos(playerid,Map[ZombieSpawnX],Map[ZombieSpawnY],Map[ZombieSpawnZ]);
-			SendClientMessage(playerid, 0xFFFFF55, "{ffffff}[{33FF99}ANTI-SK{ffffff}]: You Have 5 Seconds Of Spawn Protection.");
-			SendClientMessage(playerid, 0xFFFFF55, "{ffffff}[{33FF99}ANTI-SK{ffffff}]: Press 'N' Key To End Spawn Protection Now.");
+			case TEAM_ZOMBIE: {
+				ZombieSetup(playerid);
+
+				SetPlayerPos(playerid,Map[ZombieSpawnX],Map[ZombieSpawnY],Map[ZombieSpawnZ]);
+
+				SetPlayerHealth(playerid, 99999);
+				pASK_Timer[playerid] = SetTimerEx("EndAntiSpawnKill", 5000, false, "i", playerid);
+				SendClientMessage(playerid, 0xFFFFF55, "{ffffff}[{33FF99}ANTI-SK{ffffff}]: You Have 5 Seconds Of Spawn Protection.");
+				SendClientMessage(playerid, 0xFFFFF55, "{ffffff}[{33FF99}ANTI-SK{ffffff}]: Press 'N' Key To End Spawn Protection Now.");
+
+				ShowZombieMenu(playerid);
+			}
+
+			case TEAM_HUMAN: {
+				HumanSetup(playerid);
+
+				switch (random(2))
+				{
+					case 0: SetPlayerPos(playerid,Map[HumanSpawnX],Map[HumanSpawnY],Map[HumanSpawnZ]);
+					case 1: SetPlayerPos(playerid,Map[HumanSpawn2X],Map[HumanSpawn2Y],Map[HumanSpawn2Z]);
+				}
+
+				ShowShopDialog(playerid);
+			}
 		}
 
 		if (pInfo[playerid][Frozen] == 1)
@@ -1272,19 +1275,17 @@ public OnPlayerSpawn(playerid)
 			SendClientMessage(playerid,COLOR_RED,"You are still frozen!");
 		}
 
-		if (pInfo[playerid][pTeam] == TEAM_HUMAN)
-		{
-			HumanSetup(playerid);
-			switch (random(2))
-			{
-				case 0: SetPlayerPos(playerid,Map[HumanSpawnX],Map[HumanSpawnY],Map[HumanSpawnZ]);
-				case 1: SetPlayerPos(playerid,Map[HumanSpawn2X],Map[HumanSpawn2Y],Map[HumanSpawn2Z]);
-			}
-		}
 		setClass(playerid);
 		SpawnVars(playerid);
-		StopAudioStreamForPlayer(playerid);
 	}
+	
+	StopAudioStreamForPlayer(playerid);
+
+	UpdateKillsTextdraw(playerid);
+	UpdateDeathsTextdraw(playerid);
+	UpdateKDTextdraw(playerid);
+	UpdateTokensTextdraw(playerid);
+	UpdateRanksTextdraw(playerid);
 	
 	TextDrawHideForPlayer(playerid, Textdraw7);
 	TextDrawHideForPlayer(playerid, Textdraw8);
@@ -1295,6 +1296,7 @@ public OnPlayerSpawn(playerid)
 	return 1;
 }
 
+forward EndAntiSpawnKill(playerid);
 public EndAntiSpawnKill(playerid)
 {
 	if (pInfo[playerid][pTeam] != TEAM_ZOMBIE) return 1;
