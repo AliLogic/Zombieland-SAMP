@@ -2148,7 +2148,9 @@ TerroristBomb() {
 		if (gBomb[i][E_BOMB_PLAYERID] == INVALID_PLAYER_ID) continue;
 
 		foreach (new j : Player) {
-			if (pInfo[j][pTeam] != TEAM_ZOMBIE) continue;
+			
+			if (pInfo[j][pTeam] == TEAM_HUMAN)
+				continue;
 
 			GetPlayerPos(j, x, y, z);
 
@@ -2156,15 +2158,12 @@ TerroristBomb() {
 
 			if (distance <= 1.0) {
 				CreateExplosion(x, y, z, 3, 20.0);
+				DestroyDynamicObject(gBomb[i][E_BOMB_OBJECT]);
 
 				gBomb[i][E_BOMB_OBJECT] = INVALID_OBJECT_ID;
 				gBomb[i][E_BOMB_PLAYERID] = INVALID_PLAYER_ID;
-
-				/*
-					You can do a lot by tracking the bomber ID and give them rewards for killing them
-				*/
-
-				break;
+				
+				// You can add a function to send the bomber some XP or cash!
 			}
 		}
 	}
